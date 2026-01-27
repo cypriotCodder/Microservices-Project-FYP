@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  monolith-backend:
+    build: ./backend
+    ports:
+      - "4000:4000"
+    env_file: ./backend/.env
+
+  monolith-client:
+    build: ./client
+    ports:
+      - "5174:5173"
+    environment:
+      - VITE_API_URL=http://localhost:4000
+    volumes:
+      - ./client:/app
+      - /app/node_modules
