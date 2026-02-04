@@ -1,18 +1,17 @@
 import { Router } from 'express';
+import connectDB from '../config/db';
+import { Product } from '../models/products';
 
 const router = Router();
-
-// Mock Data
-const products = [
-    { id: 1, name: 'Laptop', price: 999 },
-    { id: 2, name: 'Phone', price: 499 }
-];
+connectDB();
 
 router.get('/health', (req, res) => {
     res.json({ status: 'Product Module is running' });
 });
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
+    //fetch from the database
+    const products = await Product.find();
     res.json(products);
 });
 

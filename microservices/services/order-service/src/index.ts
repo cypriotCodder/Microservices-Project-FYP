@@ -21,6 +21,9 @@ app.get('/', (req, res) => {
 app.post('/', (req, res) => {
     const order = req.body;
     res.status(201).json({ message: 'Order created', order });
+    //update the database
+    const { productId, quantity } = order;
+    //Product.updateOne({ _id: productId }, { $inc: { stock: -quantity } });
 });
 
 app.listen(PORT, () => {
