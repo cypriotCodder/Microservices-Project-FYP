@@ -1,5 +1,6 @@
 import express from 'express';
 import dotenv from 'dotenv';
+import { Product } from './models/product';
 
 dotenv.config();
 
