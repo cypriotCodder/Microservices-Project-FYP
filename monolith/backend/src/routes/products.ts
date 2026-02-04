@@ -1,9 +1,7 @@
 import { Router } from 'express';
-import connectDB from '../config/db';
 import { Product } from '../models/products';
 
 const router = Router();
-connectDB();
 
 router.get('/health', (req, res) => {
     res.json({ status: 'Product Module is running' });

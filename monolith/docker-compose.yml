@@ -5,6 +5,8 @@ services:
     ports:
       - "4000:4000"
     env_file: ./backend/.env
+    environment:
+      - MONGO_URI=mongodb+srv://nedim:8011@fyp.aubab4u.mongodb.net/?appName=FYP
 
   monolith-client:
     build: ./client

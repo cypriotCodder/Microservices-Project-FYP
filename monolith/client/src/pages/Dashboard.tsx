@@ -7,6 +7,8 @@ interface Product {
     id: number;
     name: string;
     price: number;
+    stock: number;
+    image?: string;
 }
 
 export function Dashboard() {
@@ -49,6 +51,9 @@ export function Dashboard() {
                                 <div style={{
                                     height: '150px',
                                     background: 'linear-gradient(45deg, #333, #444)',
+                                    backgroundImage: product.image ? `url(${product.image})` : 'linear-gradient(45deg, #333, #444)',
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
                                     borderRadius: '8px',
                                     marginBottom: '1rem',
                                     display: 'flex',
@@ -56,14 +61,22 @@ export function Dashboard() {
                                     justifyContent: 'center',
                                     color: '#666'
                                 }}>
-                                    Product Image
+                                    {!product.image && 'Product Image'}
                                 </div>
                                 <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>{product.name}</h3>
-                                <p style={{ color: 'var(--accent-color)', fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '1.5rem' }}>
+                                <p style={{ color: 'var(--accent-color)', fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '0.5rem' }}>
                                     ${product.price}
                                 </p>
-                                <button className="btn" style={{ width: '100%' }} onClick={() => handleOrder(product.id)}>
-                                    Add to Cart
+                                <p style={{ color: product.stock > 0 ? '#4caf50' : '#f44336', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                                    {product.stock > 0 ? `${product.stock} in stock` : 'Out of Stock'}
+                                </p>
+                                <button
+                                    className="btn"
+                                    style={{ width: '100%', opacity: product.stock > 0 ? 1 : 0.5, cursor: product.stock > 0 ? 'pointer' : 'not-allowed' }}
+                                    onClick={() => handleOrder(product.id)}
+                                    disabled={product.stock === 0}
+                                >
+                                    {product.stock > 0 ? 'Add to Cart' : 'Sold Out'}
                                 </button>
                             </div>
                         ))}
