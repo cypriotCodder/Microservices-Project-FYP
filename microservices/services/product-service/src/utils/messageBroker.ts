@@ -1,6 +1,6 @@
-import amqp, { Channel, Connection } from "amqplib";
+import amqp, { Channel, ChannelModel } from "amqplib";
 
-let connection: Connection | null = null;
+let connection: ChannelModel | null = null;
 let channel: Channel | null = null;
 
 // Docker service name for RabbitMQ is usually 'rabbitmq'

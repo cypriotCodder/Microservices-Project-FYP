@@ -1,5 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
+import { connectToRabbitMQ } from "./utils/messageBroker";
+import connectDB from "./config/db";
+import orderRoutes from "./routes";
 
 dotenv.config();
 
@@ -12,10 +15,19 @@ app.get('/health', (req, res) => {
     res.json({ status: 'Order Service is running' });
 });
 
+const startServer = async () => {
+    await connectDB();
+
+    // CONNECT TO RABBITMQ
+    await connectToRabbitMQ();
+
+    app.listen(PORT, () => {
+        console.log(`Order Service running on port ${PORT}`);
+    });
+};
+
 app.get('/', (req, res) => {
-    res.json([
-        { id: 1, productId: 1, quantity: 1, status: 'pending' }
-    ]);
+    res.json(createOrder);
 });
 
 app.post('/', (req, res) => {
@@ -26,6 +38,6 @@ app.post('/', (req, res) => {
     //Product.updateOne({ _id: productId }, { $inc: { stock: -quantity } });
 });
 
-app.listen(PORT, () => {
-    console.log(`Order Service running on port ${PORT}`);
-});
+app.use("/api/orders", orderRoutes);
+
+startServer();

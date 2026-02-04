@@ -3,10 +3,9 @@ import dotenv from 'dotenv';
 import { Product } from './models/product';
 import { seedProducts } from "./controllers/productController";
 import connectDB from './config/db';
+import { connectToRabbitMQ } from "./utils/messageBroker";
 
 dotenv.config();
-
-connectDB();
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -31,6 +30,15 @@ app.post('/', (req, res) => {
 
 app.post('/seed', seedProducts);
 
-app.listen(PORT, () => {
-    console.log(`Product Service running on port ${PORT}`);
-});
+const startServer = async () => {
+    connectDB();
+
+    // CONNECT TO RABBITMQ
+    await connectToRabbitMQ();
+
+    app.listen(PORT, () => {
+        console.log(`Product Service running on port ${PORT}`);
+    });
+};
+
+startServer();
