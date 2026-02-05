@@ -27,7 +27,7 @@ const startServer = async () => {
 };
 
 app.get('/', (req, res) => {
-    res.json(createOrder);
+    res.json();
 });
 
 app.post('/', (req, res) => {
