@@ -8,8 +8,5 @@
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true
-    },
-    "exclude": [
-        "prisma.config.ts"
-    ]
+    }
 }

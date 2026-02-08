@@ -4,18 +4,13 @@ WORKDIR /app
 
 COPY package*.json ./
 COPY tsconfig.json ./
-COPY prisma ./prisma
-COPY prisma.config.ts ./
 
 RUN npm install
-
-# Generate Prisma Client
-RUN npx prisma generate
 
 COPY . .
 
 RUN npm run build
 
-EXPOSE 3001
+EXPOSE 3005
 
 CMD ["npm", "start"]

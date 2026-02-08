@@ -41,6 +41,24 @@ app.use('/orders', createProxyMiddleware({
     },
 }));
 
+app.use('/recommendations', createProxyMiddleware({
+    target: process.env.RECOMMENDATION_SERVICE_URL || 'http://localhost:3004',
+    changeOrigin: true,
+    pathRewrite: {
+        '^/recommendations': '',
+    },
+}));
+
+app.use('/llm', createProxyMiddleware({
+    target: process.env.LLM_SERVICE_URL || 'http://localhost:3005',
+    changeOrigin: true,
+    pathRewrite: {
+        '^/llm': '',
+    },
+}));
+
+
+
 app.listen(PORT, () => {
     console.log(`API Gateway running on port ${PORT}`);
 });

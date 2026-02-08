@@ -1,0 +1,27 @@
+{
+    "name": "recommendation-service",
+    "version": "1.0.0",
+    "description": "Recommendation Service",
+    "main": "index.js",
+    "scripts": {
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "dev": "nodemon src/index.ts"
+    },
+    "dependencies": {
+        "@prisma/adapter-pg": "^7.3.0",
+        "@prisma/client": "^7.3.0",
+        "dotenv": "^16.3.1",
+        "express": "^4.18.2",
+        "pg": "^8.11.3",
+        "prisma": "^7.3.0"
+    },
+    "devDependencies": {
+        "@types/express": "^4.17.21",
+        "@types/node": "^20.19.33",
+        "@types/pg": "^8.16.0",
+        "nodemon": "^3.0.3",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.3.3"
+    }
+}
