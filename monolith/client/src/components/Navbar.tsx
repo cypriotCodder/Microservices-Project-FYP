@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, LogOut, Package, Home } from 'lucide-react';
+import { ShoppingCart, LogOut, Package, Home, FileText } from 'lucide-react';
 import '../styles/main.css';
 
 export function Navbar() {
@@ -35,6 +35,12 @@ export function Navbar() {
                             </Link>
                             <Link to="/orders" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)' }}>
                                 <ShoppingCart size={18} /> Orders
+                            </Link>
+                            <Link to="/traffic" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)' }}>
+                                <span>🚦</span> Traffic
+                            </Link>
+                            <Link to="/content" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)' }}>
+                                <FileText size={18} /> Content Creator
                             </Link>
                             <button onClick={handleLogout} className="btn-outline" style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <LogOut size={16} /> Logout

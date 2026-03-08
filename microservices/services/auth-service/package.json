@@ -13,17 +13,19 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@prisma/client": "^7.3.0",
     "bcrypt": "^6.0.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.3",
-    "@prisma/client": "^7.3.0"
+    "jsonwebtoken": "^9.0.3"
   },
   "devDependencies": {
+    "@prisma/adapter-pg": "^7.3.0",
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.0.10",
+    "@types/pg": "^8.16.0",
     "nodemon": "^3.1.11",
     "prisma": "^7.3.0",
     "ts-node": "^10.9.2",

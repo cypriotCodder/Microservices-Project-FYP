@@ -57,6 +57,16 @@ app.use('/llm', createProxyMiddleware({
     },
 }));
 
+app.use('/content', createProxyMiddleware({
+    target: process.env.CONTENT_CREATOR_URL || 'http://content-creator:3008',
+    changeOrigin: true
+}));
+
+app.use('/traffic', createProxyMiddleware({
+    target: process.env.TRAFFIC_SERVICE_URL || 'http://traffic-service:3007',
+    changeOrigin: true
+}));
+
 
 
 app.listen(PORT, () => {

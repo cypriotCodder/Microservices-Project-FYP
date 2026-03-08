@@ -17,3 +17,17 @@ services:
     volumes:
       - ./client:/app
       - /app/node_modules
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 8011nedimK216
+      POSTGRES_DB: monolith_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_monolith:/var/lib/postgresql/data
+
+volumes:
+  postgres_data_monolith:

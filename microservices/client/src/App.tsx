@@ -3,6 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Orders } from './pages/Orders';
+import { TrafficControl } from './pages/TrafficControl';
+import ContentControl from './pages/ContentControl';
+import ProductDetails from './pages/ProductDetails';
 import './styles/main.css';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -28,6 +31,30 @@ function App() {
             <Orders />
           </ProtectedRoute>
         } />
+        <Route
+          path="/traffic"
+          element={
+            <ProtectedRoute>
+              <TrafficControl />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/content"
+          element={
+            <ProtectedRoute>
+              <ContentControl />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/product/:id"
+          element={
+            <ProtectedRoute>
+              <ProductDetails />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );

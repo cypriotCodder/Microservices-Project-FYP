@@ -19,26 +19,31 @@ let channel = null;
 // Docker service name for RabbitMQ is usually 'rabbitmq'
 const RABBITMQ_URL = "amqp://rabbitmq:5672";
 const connectToRabbitMQ = () => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        // 1. Connect to the RabbitMQ Server
-        connection = yield amqplib_1.default.connect(RABBITMQ_URL);
-        // 2. Create a Channel (This is where we publish/consume messages)
-        channel = yield connection.createChannel();
-        // 3. Define the Queue (idempotent: only creates if it doesn't exist)
-        // "durable: true" means the queue survives if RabbitMQ crashes
-        yield channel.assertQueue("ORDER_CREATED", { durable: true });
-        console.log("Connected to RabbitMQ successfully");
-        // Handle connection close events
-        connection.on("close", () => {
-            console.error("RabbitMQ connection closed. Retrying...");
-            setTimeout(exports.connectToRabbitMQ, 5000);
-        });
+    let retries = 5;
+    while (retries > 0) {
+        try {
+            // 1. Connect to the RabbitMQ Server
+            connection = yield amqplib_1.default.connect(RABBITMQ_URL);
+            // 2. Create a Channel (This is where we publish/consume messages)
+            channel = yield connection.createChannel();
+            // 3. Define the Queue (idempotent: only creates if it doesn't exist)
+            // "durable: true" means the queue survives if RabbitMQ crashes
+            yield channel.assertQueue("ORDER_CREATED", { durable: true });
+            console.log("Connected to RabbitMQ successfully");
+            // Handle connection close events
+            connection.on("close", () => {
+                console.error("RabbitMQ connection closed. Retrying...");
+                setTimeout(exports.connectToRabbitMQ, 5000);
+            });
+            return;
+        }
+        catch (error) {
+            console.error(`Failed to connect to RabbitMQ. Retries left: ${retries - 1}`, error);
+            retries -= 1;
+            yield new Promise(resolve => setTimeout(resolve, 5000));
+        }
     }
-    catch (error) {
-        console.error("Failed to connect to RabbitMQ:", error);
-        // Retry logic: try again in 5 seconds if connection fails
-        setTimeout(exports.connectToRabbitMQ, 5000);
-    }
+    console.error("Could not connect to RabbitMQ after several attempts.");
 });
 exports.connectToRabbitMQ = connectToRabbitMQ;
 // Helper to access the channel from other files

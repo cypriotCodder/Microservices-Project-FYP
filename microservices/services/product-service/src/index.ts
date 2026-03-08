@@ -1,9 +1,10 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import { Product } from './models/product';
+import { Review } from './models/review';
 import { seedProducts } from "./controllers/productController";
 import connectDB from './config/db';
-import { connectToRabbitMQ } from "./utils/messageBroker";
+import { connectToRabbitMQ, consumeOrderCreatedEvents, consumeOrderDeletedEvents } from "./utils/messageBroker";
 
 dotenv.config();
 
@@ -23,9 +24,43 @@ app.get('/', async (req, res) => {
     res.json(products);
 });
 
-app.post('/', (req, res) => {
-    const product = req.body;
-    res.status(201).json({ message: 'Product created', product });
+app.get('/:id', async (req, res) => {
+    try {
+        const product = await Product.findById(req.params.id);
+        if (!product) return res.status(404).json({ message: 'Product not found' });
+        res.json(product);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching product', error });
+    }
+});
+
+app.post('/', async (req, res) => {
+    try {
+        const product = await Product.create(req.body);
+        res.status(201).json({ message: 'Product created', product });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to create product', error });
+    }
+});
+
+app.post('/:productId/reviews', async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const reviewData = { ...req.body, productId };
+        const review = await Review.create(reviewData);
+        res.status(201).json({ message: 'Review created', review });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to create review', error });
+    }
+});
+
+app.get('/:productId/reviews', async (req, res) => {
+    try {
+        const reviews = await Review.find({ productId: req.params.productId }).sort({ createdAt: -1 });
+        res.json(reviews);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching reviews', error });
+    }
 });
 
 app.post('/seed', seedProducts);
@@ -35,6 +70,10 @@ const startServer = async () => {
 
     // CONNECT TO RABBITMQ
     await connectToRabbitMQ();
+
+    // START CONSUMING MESSAGES
+    await consumeOrderCreatedEvents();
+    await consumeOrderDeletedEvents();
 
     app.listen(PORT, () => {
         console.log(`Product Service running on port ${PORT}`);

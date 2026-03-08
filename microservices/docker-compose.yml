@@ -10,10 +10,32 @@ services:
       - ORDER_SERVICE_URL=http://order-service:3003
       - RECOMMENDATION_SERVICE_URL=http://recommendation-service:3004
       - LLM_SERVICE_URL=http://llm-service:3005
+      - CONTENT_CREATOR_URL=http://content-creator:3008
     depends_on:
       - auth-service
       - product-service
       - order-service
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  mongo:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: examplepassword
+    volumes:
+      - mongodb_data:/data/db
 
   postgres:
     image: postgres:15
@@ -54,6 +76,15 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:8011nedimK216@postgres:5432/microservices_db?schema=recommendation
 
+  traffic-service:
+    build: ./services/traffic-service
+    ports:
+      - "3007:3007"
+    environment:
+      - PORT=3007
+    depends_on:
+      - api-gateway
+
   llm-service:
     build: ./services/llm-service
     ports:
@@ -61,12 +92,12 @@ services:
     environment:
       - PORT=3005
 
-  traffic-generator:
-    build: ./services/traffic-generator
+  content-creator:
+    build: ./services/content-creator
+    ports:
+      - "3008:3008"
     environment:
-      - API_GATEWAY_URL=http://api-gateway:8080
-    depends_on:
-      - api-gateway
+      - PORT=3008
 
   client:
     build: ./client
@@ -80,3 +111,5 @@ services:
 
 volumes:
   postgres_data:
+  mongodb_data:
+  rabbitmq_data:
