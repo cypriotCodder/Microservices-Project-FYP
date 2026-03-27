@@ -1,5 +1,6 @@
 import amqp, { Channel, ChannelModel } from "amqplib";
 import { Product } from "../models/product";
+import { redisClient } from "../config/redis";
 
 let connection: ChannelModel | null = null;
 let channel: Channel | null = null;
@@ -19,7 +20,7 @@ export const connectToRabbitMQ = async (): Promise<void> => {
 
       // 3. Define the Queue (idempotent: only creates if it doesn't exist)
       // "durable: true" means the queue survives if RabbitMQ crashes
-      await channel.assertQueue("ORDER_CREATED", { durable: true });
+      await channel.assertQueue("ORDER_BOUGHT", { durable: true });
 
       console.log("Connected to RabbitMQ successfully");
 
@@ -44,19 +45,19 @@ export const getChannel = (): Channel | null => {
   return channel;
 };
 
-export const consumeOrderCreatedEvents = async () => {
+export const consumeOrderBoughtEvents = async () => {
   if (!channel) {
     console.error("RabbitMQ channel not found. Cannot consume events.");
     return;
   }
 
   // Ensure the queue exists
-  await channel.assertQueue("ORDER_CREATED", { durable: true });
+  await channel.assertQueue("ORDER_BOUGHT", { durable: true });
 
-  console.log("Listening for ORDER_CREATED events...");
+  console.log("Listening for ORDER_BOUGHT events...");
 
   // Start consuming messages from the queue
-  channel!.consume("ORDER_CREATED", async (msg) => {
+  channel!.consume("ORDER_BOUGHT", async (msg) => {
     if (msg !== null) {
       try {
         // 1. Parse the message data
@@ -66,11 +67,15 @@ export const consumeOrderCreatedEvents = async () => {
         // 2. Loop through the products in the order
         if (eventData.products && Array.isArray(eventData.products)) {
           for (const item of eventData.products) {
-            // 3. Decrement the stock in the MongoDB database
+            // 3. Decrement the stock count in the MongoDB database
             await Product.updateOne(
               { _id: item.productId },
               { $inc: { stock: -item.quantity } }
             );
+            
+            // Invalidate the cache for this product and the master list
+            await redisClient.del(`product:${item.productId}`);
+            await redisClient.del('products:all');
             console.log(`Decremented stock for product ${item.productId} by ${item.quantity}`);
           }
         }
@@ -79,7 +84,7 @@ export const consumeOrderCreatedEvents = async () => {
         channel!.ack(msg);
 
       } catch (error) {
-        console.error("Error processing ORDER_CREATED event:", error);
+        console.error("Error processing ORDER_BOUGHT event:", error);
         // If it fails, we don't acknowledge, so RabbitMQ can requeue it or move it to a dead-letter queue
       }
     }
@@ -113,6 +118,9 @@ export const consumeOrderDeletedEvents = async () => {
               { _id: item.productId },
               { $inc: { stock: item.quantity } }
             );
+            // Invalidate the cache for this product and the master list
+            await redisClient.del(`product:${item.productId}`);
+            await redisClient.del('products:all');
             console.log(`Refunded stock for product ${item.productId} by ${item.quantity}`);
           }
         }

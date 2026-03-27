@@ -37,7 +37,7 @@ app.post('/register', async (req, res) => {
             data: { username, password: hashedPassword },
         });
 
-        res.status(201).json({ message: 'User created successfully', userId: user.id });
+        res.status(201).json({ message: 'User created successfully', userId: user.id, role: user.role });
     } catch (error) {
         console.error('Register error:', error);
         res.status(500).json({ message: 'Internal server error' });
@@ -58,10 +58,19 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: '1h' });
-        res.json({ token, userId: user.id, username: user.username });
+        const token = jwt.sign({ sub: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '1h' });
+        res.json({ token, userId: user.id, username: user.username, role: user.role });
     } catch (error) {
         console.error('Login error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+app.get('/admin/users/count', async (req, res) => {
+    try {
+        const count = await prisma.user.count();
+        res.json({ count });
+    } catch (error) {
         res.status(500).json({ message: 'Internal server error' });
     }
 });

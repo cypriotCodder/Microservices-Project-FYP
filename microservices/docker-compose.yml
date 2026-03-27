@@ -37,6 +37,11 @@ services:
     volumes:
       - mongodb_data:/data/db
 
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
   postgres:
     image: postgres:15
     environment:
@@ -61,12 +66,17 @@ services:
     ports:
       - "3002:3002"
     env_file: ./services/product-service/.env
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - MONGO_URI=mongodb://root:examplepassword@mongo:27017/microservices_products?authSource=admin
 
   order-service:
     build: ./services/order-service
     ports:
       - "3003:3003"
     env_file: ./services/order-service/.env
+    environment:
+      - MONGO_URI=mongodb://root:examplepassword@mongo:27017/microservices_orders?authSource=admin
 
   recommendation-service:
     build: ./services/recommendation-service
@@ -89,6 +99,7 @@ services:
     build: ./services/llm-service
     ports:
       - "3005:3005"
+    env_file: ./services/llm-service/.env
     environment:
       - PORT=3005
 

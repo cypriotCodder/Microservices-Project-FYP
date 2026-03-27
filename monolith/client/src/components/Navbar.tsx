@@ -12,18 +12,9 @@ export function Navbar() {
     };
 
     return (
-        <nav style={{
-            borderBottom: '1px solid var(--border-color)',
-            padding: '1rem 0',
-            marginBottom: '2rem',
-            backgroundColor: 'rgba(26, 26, 26, 0.8)',
-            backdropFilter: 'blur(10px)',
-            position: 'sticky',
-            top: 0,
-            zIndex: 100
-        }}>
-            <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Link to="/" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--accent-color)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <nav className="navbar" style={{ backgroundColor: 'var(--card-bg)', padding: '1rem', borderBottom: '1px solid var(--border-color)' }}>
+            <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 auto', maxWidth: '1200px' }}>
+                <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-color)', fontWeight: 'bold', fontSize: '1.25rem', textDecoration: 'none' }}>
                     <Package /> MicroShop
                 </Link>
 
@@ -42,12 +33,13 @@ export function Navbar() {
                             <Link to="/content" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)' }}>
                                 <FileText size={18} /> Content Creator
                             </Link>
-                            <button onClick={handleLogout} className="btn-outline" style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <button onClick={handleLogout} className="btn-outline" style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', background: 'transparent', color: 'var(--text-color)' }}>
                                 <LogOut size={16} /> Logout
                             </button>
                         </>
                     ) : (
-                        <Link to="/login" className="btn">Login</Link>
+                        <Link to="/login" className="btn-primary" style={{ padding: '0.5rem 1rem', backgroundColor: 'var(--accent-color)', color: 'white', textDecoration: 'none', borderRadius: '4px' }}>
+                            Login</Link>
                     )}
                 </div>
             </div>

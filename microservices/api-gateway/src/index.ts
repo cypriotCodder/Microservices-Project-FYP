@@ -2,6 +2,8 @@ import express from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { telemetryMiddleware } from './middleware/telemetry';
+import adminRoutes from './routes/admin';
 
 dotenv.config();
 
@@ -9,6 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 app.use(cors());
+app.use(telemetryMiddleware);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -67,7 +70,7 @@ app.use('/traffic', createProxyMiddleware({
     changeOrigin: true
 }));
 
-
+app.use('/admin', adminRoutes);
 
 app.listen(PORT, () => {
     console.log(`API Gateway running on port ${PORT}`);

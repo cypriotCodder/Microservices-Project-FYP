@@ -78,6 +78,14 @@ button {
     background-color: var(--accent-hover);
 }
 
+.btn-summarize {
+    color: black;
+}
+
+.btn-summarize:hover {
+    color: white;
+}
+
 .btn-outline {
     background-color: transparent;
     border: 1px solid var(--border-color);

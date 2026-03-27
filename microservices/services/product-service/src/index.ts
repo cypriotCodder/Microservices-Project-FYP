@@ -4,7 +4,8 @@ import { Product } from './models/product';
 import { Review } from './models/review';
 import { seedProducts } from "./controllers/productController";
 import connectDB from './config/db';
-import { connectToRabbitMQ, consumeOrderCreatedEvents, consumeOrderDeletedEvents } from "./utils/messageBroker";
+import { connectRedis, redisClient } from './config/redis';
+import { connectToRabbitMQ, consumeOrderBoughtEvents, consumeOrderDeletedEvents } from "./utils/messageBroker";
 
 dotenv.config();
 
@@ -18,16 +19,33 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/', async (req, res) => {
-    // fetch from the db
-    const products = await Product.find();
+    try {
+        const cachedProducts = await redisClient.get('products:all');
+        if (cachedProducts) {
+            return res.json(JSON.parse(cachedProducts));
+        }
 
-    res.json(products);
+        const products = await Product.find();
+        
+        await redisClient.setEx('products:all', 3600, JSON.stringify(products));
+        res.json(products);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching products', error });
+    }
 });
 
 app.get('/:id', async (req, res) => {
     try {
+        const cacheKey = `product:${req.params.id}`;
+        const cachedProduct = await redisClient.get(cacheKey);
+        if (cachedProduct) {
+            return res.json(JSON.parse(cachedProduct));
+        }
+
         const product = await Product.findById(req.params.id);
         if (!product) return res.status(404).json({ message: 'Product not found' });
+        
+        await redisClient.setEx(cacheKey, 3600, JSON.stringify(product));
         res.json(product);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching product', error });
@@ -37,9 +55,21 @@ app.get('/:id', async (req, res) => {
 app.post('/', async (req, res) => {
     try {
         const product = await Product.create(req.body);
+        await redisClient.del('products:all'); // Invalidate cache
         res.status(201).json({ message: 'Product created', product });
     } catch (error) {
         res.status(500).json({ message: 'Failed to create product', error });
+    }
+});
+
+app.delete('/all', async (req, res) => {
+    try {
+        await Product.deleteMany({});
+        await Review.deleteMany({}); // Clean up orphaned reviews
+        await redisClient.del('products:all'); // Invalidate cache
+        res.json({ message: 'All products and reviews seamlessly wiped from database' });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to delete products', error });
     }
 });
 
@@ -67,12 +97,14 @@ app.post('/seed', seedProducts);
 
 const startServer = async () => {
     connectDB();
+    await connectRedis();
 
     // CONNECT TO RABBITMQ
     await connectToRabbitMQ();
 
     // START CONSUMING MESSAGES
-    await consumeOrderCreatedEvents();
+    // 2. Start listening to queues
+    await consumeOrderBoughtEvents();
     await consumeOrderDeletedEvents();
 
     app.listen(PORT, () => {

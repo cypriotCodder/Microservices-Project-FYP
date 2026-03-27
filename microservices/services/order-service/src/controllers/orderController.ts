@@ -17,23 +17,10 @@ export const createOrder = async (req: Request, res: Response) => {
       status: 'PENDING'
     });
 
-    // 3. Send Event to RabbitMQ
-    const channel = getChannel();
+    // PENDING orders act as the "Shopping Cart".
+    // We intentionally SKIP sending the RabbitMQ stock decrement event here 
+    // because the user has not clicked 'Buy' yet.
 
-    if (channel) {
-      const eventData = JSON.stringify({
-        orderId: newOrder._id,
-        products: products,
-        userId: userId
-      });
-
-      // Send to the 'ORDER_CREATED' queue
-      channel.sendToQueue("ORDER_CREATED", Buffer.from(eventData));
-      console.log(`📤 Event Sent: ORDER_CREATED for Order ${newOrder._id}`);
-    } else {
-      // Critical for Dissertation: This logs a failure in your 'Fault Tolerance' test
-      console.warn("⚠️ RabbitMQ not connected! Order saved but stock not updated.");
-    }
 
     // 4. Return immediate response (Low Latency!)
     res.status(201).json({
@@ -48,8 +35,9 @@ export const createOrder = async (req: Request, res: Response) => {
 };
 
 export const getOrders = async (req: Request, res: Response) => {
+  const userId = req.params.userId;
   try {
-    const orders = await Order.find().sort({ createdAt: -1 });
+    const orders = await Order.find({ userId }).sort({ createdAt: -1 });
     res.status(200).json(orders);
   } catch (error) {
     console.error("Failed to fetch orders:", error);
@@ -91,5 +79,121 @@ export const deleteOrder = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Failed to delete order:", error);
     res.status(500).json({ error: "Failed to delete order" });
+  }
+};
+
+export const deleteAllOrders = async (req: Request, res: Response) => {
+  const userId = req.params.userId;
+
+  try {
+    const orders = await Order.find({ userId });
+
+    // Send Events to RabbitMQ fully refunding stock for all orders
+    const channel = getChannel();
+
+    if (channel) {
+      for (const order of orders) {
+        const eventData = JSON.stringify({
+          orderId: order._id,
+          products: order.products,
+          userId: order.userId
+        });
+
+        // Send to the 'ORDER_DELETED' queue
+        channel.sendToQueue("ORDER_DELETED", Buffer.from(eventData));
+        console.log(`🗑️ Event Sent: ORDER_DELETED for Order ${order._id}`);
+      }
+    } else {
+      console.warn("⚠️ RabbitMQ not connected! Orders deleted but stock not refunded.");
+    }
+
+    // Delete all user orders
+    await Order.deleteMany({ userId });
+
+    res.status(200).json({ message: "All orders deleted successfully" });
+  } catch (error) {
+    console.error("Failed to delete all orders:", error);
+    res.status(500).json({ error: "Failed to delete all orders" });
+  }
+};
+
+export const getAdminMetrics = async (req: Request, res: Response) => {
+  try {
+    const totalOrders = await Order.countDocuments();
+
+    const revenueAgg = await Order.aggregate([{ $group: { _id: null, total: { $sum: "$totalAmount" } } }]);
+    const totalRevenue = revenueAgg[0]?.total || 0;
+
+    const topProducts = await Order.aggregate([
+      { $unwind: "$products" },
+      { $group: { _id: "$products.productId", totalSold: { $sum: "$products.quantity" } } },
+      { $sort: { totalSold: -1 } },
+      { $limit: 10 }
+    ]);
+
+    // Orders per minute for the last hour
+    const lastHour = new Date(Date.now() - 60 * 60 * 1000);
+    const ordersPerMinute = await Order.aggregate([
+      { $match: { createdAt: { $gte: lastHour } } },
+      {
+        $group: {
+          _id: { $dateTrunc: { date: "$createdAt", unit: "minute" } },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    res.json({
+      totalOrders,
+      totalRevenue,
+      topProducts,
+      ordersPerMinute
+    });
+  } catch (error) {
+    console.error("Failed to fetch admin metrics:", error);
+    res.status(500).json({ error: "Failed to fetch admin metrics" });
+  }
+};
+
+export const buyOrder = async (req: Request, res: Response) => {
+  const orderId = req.params.id;
+
+  try {
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    if (order.status === 'COMPLETED') {
+      return res.status(400).json({ error: "Order is already completed" });
+    }
+
+    // Send Event to RabbitMQ fully deleting product records
+    const channel = getChannel();
+
+    if (channel) {
+      const eventData = JSON.stringify({
+        orderId: order._id,
+        products: order.products,
+        userId: order.userId
+      });
+
+      // Send to the 'ORDER_BOUGHT' queue which completely deletes Product records
+      channel.sendToQueue("ORDER_BOUGHT", Buffer.from(eventData));
+      console.log(`✅ Event Sent: ORDER_BOUGHT for Order ${order._id}`);
+    } else {
+      console.warn("⚠️ RabbitMQ not connected! Order completed but items not removed from marketplace.");
+    }
+
+    // Checkout complete 
+    order.status = 'COMPLETED';
+    await order.save();
+
+    res.status(200).json({ message: "Order completed successfully", order });
+  } catch (error) {
+    console.error("Failed to complete order checkout:", error);
+    res.status(500).json({ error: "Failed to complete order" });
   }
 };

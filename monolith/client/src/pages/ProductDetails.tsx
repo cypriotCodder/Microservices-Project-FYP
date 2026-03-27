@@ -39,6 +39,17 @@ export default function ProductDetails() {
                 setProduct(prodData);
                 const reviewData = await fetchFromAPI(`/products/${id}/reviews`);
                 setReviews(Array.isArray(reviewData) ? reviewData : []);
+
+                // Track product view/click for recommendations
+                const userStr = localStorage.getItem('user');
+                const currentUser = userStr ? JSON.parse(userStr) : null;
+                const currentUserId = currentUser?.userId || "1";
+
+                fetchFromAPI('/recommendations/click', {
+                    method: 'POST',
+                    body: JSON.stringify({ userId: currentUserId, productId: id })
+                }).catch(err => console.error("Could not track click:", err));
+
             } catch (err: any) {
                 setError(err.message || 'Failed to fetch product details.');
             } finally {
@@ -51,10 +62,9 @@ export default function ProductDetails() {
     const handleSummarize = async () => {
         setIsSummarizing(true);
         try {
-            const allReviewText = reviews.map(r => `${r.rating}/5 stars: ${r.content}`).join('\\n');
-            const payloadText = `Product: ${product?.name}\\nDescription: ${product?.description || 'N/A'}\\nReviews:\\n${allReviewText}`;
+            const payloadText = `Product Name: ${product?.name}\n\nProduct Full Description: ${product?.description || 'No description available.'}`;
 
-            // This hits the monolith /llm/summarize endpoint
+            // This hits the monolith backend which natively triggers its own LLM integration
             const response = await fetchFromAPI('/llm/summarize', {
                 method: 'POST',
                 body: JSON.stringify({ text: payloadText })
@@ -67,13 +77,39 @@ export default function ProductDetails() {
         }
     };
 
+    const handleOrder = async () => {
+        if (!product) return;
+        try {
+            const userStr = localStorage.getItem('user');
+            const currentUser = userStr ? JSON.parse(userStr) : null;
+            const currentUserId = currentUser?.userId || "1";
+
+            await fetchFromAPI('/orders', {
+                method: 'POST',
+                body: JSON.stringify({
+                    userId: currentUserId,
+                    totalAmount: product.price,
+                    products: [{ productId: product._id, quantity: 1 }]
+                })
+            });
+
+            // Update the local state to reflect the stock decrease immediately
+            setProduct(prevProduct =>
+                prevProduct ? { ...prevProduct, stock: prevProduct.stock - 1 } : null
+            );
+            alert('Order placed successfully!');
+        } catch (e) {
+            alert('Failed to place order');
+        }
+    };
+
     if (loading) return <div><Navbar /><div className="container" style={{ textAlign: 'center', marginTop: '50px' }}>Loading...</div></div>;
     if (error || !product) return <div><Navbar /><div className="container" style={{ textAlign: 'center', color: 'red', marginTop: '50px' }}>{error || 'Product not found'}</div></div>;
 
     return (
         <div>
             <Navbar />
-            <div className="container" style={{ maxWidth: '1000px', margin: '0 auto', padding: '0 1rem' }}>
+            <div className="container" style={{ maxWidth: '1000px', margin: '2rem auto', padding: '0 1rem' }}>
                 <div style={{ display: 'flex', gap: '3rem', flexDirection: 'row', flexWrap: 'wrap' }}>
 
                     {/* Left Column: Product Info */}
@@ -94,81 +130,95 @@ export default function ProductDetails() {
                         }}>
                             {!product.image && 'No Image Available'}
                         </div>
-                        <h1 style={{ fontSize: '2.5rem', marginBottom: '1rem', color: '#111' }}>{product.name}</h1>
+                        <h1 style={{ fontSize: '2.5rem', marginBottom: '1rem', color: 'var(--text-color)' }}>{product.name}</h1>
                         <p style={{ fontSize: '1.5rem', color: 'var(--accent-color)', fontWeight: 'bold', marginBottom: '1rem' }}>${product.price}</p>
 
-                        <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: product.stock > 0 ? '#4caf50' : '#f44336' }}>
+                        <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: product.stock > 0 ? 'var(--success)' : 'var(--error)' }}>
                             {product.stock > 0 ? <PackageCheck size={20} /> : <AlertCircle size={20} />}
                             <span style={{ fontSize: '1.1rem' }}>{product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}</span>
                         </div>
 
                         <div style={{ marginBottom: '2rem' }}>
-                            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', borderBottom: '1px solid #ddd', paddingBottom: '0.5rem' }}>Description</h3>
-                            <p style={{ lineHeight: '1.6', color: '#555' }}>
+                            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>Description</h3>
+                            <p style={{ lineHeight: '1.6', color: 'var(--text-secondary)' }}>
                                 {product.description || 'No description provided for this product.'}
                             </p>
                         </div>
+
+                        <button
+                            className="btn"
+                            style={{
+                                width: '100%',
+                                padding: '1rem',
+                                fontSize: '1.1rem',
+                                fontWeight: 'bold',
+                                opacity: product.stock > 0 ? 1 : 0.5,
+                                cursor: product.stock > 0 ? 'pointer' : 'not-allowed'
+                            }}
+                            onClick={handleOrder}
+                            disabled={product.stock === 0}
+                        >
+                            {product.stock > 0 ? 'Add to Cart' : 'Sold Out'}
+                        </button>
                     </div>
 
                     {/* Right Column: AI Summary & Reviews */}
                     <div style={{ flex: '1 1 400px' }}>
                         <div style={{
-                            background: '#f8f9fa',
+                            background: 'var(--card-bg)',
                             padding: '1.5rem',
                             borderRadius: '12px',
                             marginBottom: '2rem',
-                            border: '1px solid #e9ecef',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                            border: '1px solid var(--border-color)',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                         }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                                 <h3 style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
                                     <Sparkles size={20} color="#6366f1" /> AI Summary
                                 </h3>
                                 <button
-                                    className="btn-primary"
+                                    className="btn btn-summarize"
                                     onClick={handleSummarize}
-                                    disabled={isSummarizing || reviews.length === 0}
-                                    style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', opacity: (isSummarizing || reviews.length === 0) ? 0.6 : 1, backgroundColor: '#6366f1' }}
+                                    disabled={isSummarizing || !product?.description}
+                                    style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', opacity: (isSummarizing || !product?.description) ? 0.8 : 1, backgroundColor: '#6366f1', border: 'none' }}
                                 >
-                                    {isSummarizing ? 'Summarizing...' : 'Summarize Reviews'}
+                                    {isSummarizing ? 'Summarizing...' : 'Summarize details'}
                                 </button>
                             </div>
 
                             {summary ? (
-                                <p style={{ fontStyle: 'italic', color: '#4b5563', lineHeight: '1.5', background: '#eef2ff', padding: '1rem', borderRadius: '8px', borderLeft: '4px solid #6366f1' }}>
+                                <p style={{ fontStyle: 'italic', color: 'var(--text-color)', lineHeight: '1.5', background: 'rgba(99, 102, 241, 0.1)', padding: '1rem', borderRadius: '8px', borderLeft: '4px solid var(--accent-color)' }}>
                                     "{summary}"
                                 </p>
                             ) : (
-                                <p style={{ color: '#9ca3af', fontSize: '0.95rem' }}>
-                                    {reviews.length > 0
-                                        ? "Click 'Summarize' to ask our AI to read through all the reviews and provide a synthesized summary."
-                                        : "Not enough reviews yet to generate an AI summary."}
+                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+                                    Click 'Summarize' to ask our AI to concisely read and summarize the product description.
                                 </p>
                             )}
                         </div>
 
                         <div>
-                            <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', borderBottom: '1px solid #ddd', paddingBottom: '0.5rem' }}>
+                            <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
                                 Customer Reviews ({reviews.length})
                             </h3>
                             {reviews.length > 0 ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                     {reviews.map(review => (
-                                        <div key={review._id} style={{ padding: '1rem', border: '1px solid #eee', borderRadius: '8px', background: '#fff' }}>
+                                        <div key={review._id} style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                                 <span style={{ fontWeight: 'bold' }}>{'⭐'.repeat(review.rating)}</span>
-                                                <span style={{ color: '#888', fontSize: '0.85rem' }}>
+                                                <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                                                     {new Date(review.createdAt).toLocaleDateString()}
                                                 </span>
                                             </div>
-                                            {review.title && <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.05rem' }}>{review.title}</h4>}
-                                            <p style={{ margin: 0, color: '#444', lineHeight: '1.4' }}>{review.content}</p>
-                                            <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#999' }}>User: {review.userId}</div>
+                                            {review.title && <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.05rem', color: 'var(--text-color)' }}>{review.title}</h4>}
+                                            <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: '1.4' }}>{review.content}</p>
+                                            <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>User: {review.userId}</div>
                                         </div>
                                     ))}
                                 </div>
                             ) : (
-                                <p style={{ color: '#777' }}>No reviews yet. Be the first to leave a review!</p>
+                                <p style={{ color: 'var(--text-secondary)' }}>No reviews yet. Be the first to leave a review!</p>
                             )}
                         </div>
                     </div>

@@ -15,14 +15,14 @@ const generator = new ContentGenerator();
 
 // Expose control APIs
 app.post('/generate-product', async (req, res) => {
-    const { targetUrl } = req.body;
+    const { targetUrl, lengthText } = req.body;
 
     if (!targetUrl) {
         return res.status(400).json({ error: 'targetUrl is required' });
     }
 
     try {
-        const result = await generator.generateProduct(targetUrl);
+        const result = await generator.generateProduct(targetUrl, lengthText || '2 sentences');
         res.json({ message: 'Product generated successfully', data: result });
     } catch (error: any) {
         res.status(500).json({ error: error.message });

@@ -12,11 +12,21 @@ function getRandomElement(arr: any[]): any {
 export class ContentGenerator {
 
     // Generate a new random product
-    public async generateProduct(targetUrl: string): Promise<any> {
+    public async generateProduct(targetUrl: string, lengthText: string = '2 sentences'): Promise<any> {
         const name = `${getRandomElement(adjectives)} ${getRandomElement(nouns)}`;
         const price = Math.floor(Math.random() * 500) + 10;
-        const description = `This is a randomly generated ${name.toLowerCase()}. It features a compelling design and great utilities.`;
+        let description = `This is a randomly generated ${name.toLowerCase()}. It features a compelling design and great utilities.`;
         const stock = Math.floor(Math.random() * 100) + 1;
+
+        try {
+            // Attempt to dynamically generate description via the internal LLM proxy
+            const llmRes = await axios.post(`${targetUrl}/llm/generate-description`, { name, lengthText });
+            if (llmRes.data && llmRes.data.description) {
+                description = llmRes.data.description.trim();
+            }
+        } catch (error: any) {
+            console.warn("LLM generation unavailable, falling back to static generic description:", error.message);
+        }
 
         try {
             const payload = {

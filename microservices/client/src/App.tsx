@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Login } from './pages/Login';
+import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
 import { Orders } from './pages/Orders';
 import { TrafficControl } from './pages/TrafficControl';
 import ContentControl from './pages/ContentControl';
 import ProductDetails from './pages/ProductDetails';
+import { Admin } from './pages/Admin';
 import './styles/main.css';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -21,6 +23,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route path="/" element={
           <ProtectedRoute>
             <Dashboard />
@@ -52,6 +55,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ProductDetails />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <Admin />
             </ProtectedRoute>
           }
         />

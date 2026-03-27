@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import '../styles/main.css';
 
 export function Login() {
@@ -18,7 +18,7 @@ export function Login() {
 
         if (response.ok) {
             const data = await response.json();
-            localStorage.setItem('user', JSON.stringify(data.user));
+            localStorage.setItem('user', JSON.stringify(data));
             navigate('/');
         } else {
             alert('Login Failed');
@@ -51,6 +51,11 @@ export function Login() {
                         />
                     </div>
                     <button type="submit" className="btn" style={{ marginTop: '1rem' }}>Login</button>
+
+                    <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.9rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Don't have an account? </span>
+                        <Link to="/register" style={{ color: 'var(--accent-color)', textDecoration: 'none', fontWeight: 'bold' }}>Create one</Link>
+                    </div>
                 </form>
             </div>
         </div>
