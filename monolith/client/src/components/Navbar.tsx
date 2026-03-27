@@ -50,6 +50,12 @@ export function Navbar() {
                             <Link to="/content" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', textDecoration: 'none' }}>
                                 <FileText size={18} /> Content Creator
                             </Link>
+
+                            {parsedUser?.role === 'ADMIN' && (
+                                <Link to="/admin" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-color)', fontWeight: 'bold', textDecoration: 'none' }}>
+                                    <span>⚙️</span> Admin
+                                </Link>
+                            )}
                             
                             {/* Profile Dropdown */}
                             <div className="dropdown-container" ref={dropdownRef}>
