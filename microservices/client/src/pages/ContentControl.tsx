@@ -4,7 +4,7 @@ import { fetchFromAPI } from '../api/client';
 import '../styles/main.css';
 
 const ContentControl: React.FC = () => {
-    const [targetUrl, setTargetUrl] = useState<string>('http://localhost:8080');
+    const [targetUrl, setTargetUrl] = useState<string>('http://api-gateway:8080');
     const [lengthText, setLengthText] = useState<string>('2 short sentences');
     const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [isLoadingProduct, setIsLoadingProduct] = useState(false);

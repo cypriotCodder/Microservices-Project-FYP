@@ -62,7 +62,10 @@ app.use('/llm', createProxyMiddleware({
 
 app.use('/content', createProxyMiddleware({
     target: process.env.CONTENT_CREATOR_URL || 'http://content-creator:3008',
-    changeOrigin: true
+    changeOrigin: true,
+    pathRewrite: {
+        '^/content': '',
+    },
 }));
 
 app.use('/traffic', createProxyMiddleware({

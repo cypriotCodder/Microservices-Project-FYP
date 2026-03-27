@@ -1,12 +1,28 @@
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, LogOut, Package, Home, FileText } from 'lucide-react';
+import { ShoppingCart, LogOut, Package, Home, FileText, User, Settings, ChevronDown } from 'lucide-react';
 import '../styles/main.css';
 
 export function Navbar() {
     const navigate = useNavigate();
     const user = localStorage.getItem('user');
+    const parsedUser = user ? JSON.parse(user) : null;
+    
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     const handleLogout = () => {
+        setIsDropdownOpen(false);
         localStorage.removeItem('user');
         navigate('/login');
     };
@@ -34,14 +50,43 @@ export function Navbar() {
                             <Link to="/content" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', textDecoration: 'none' }}>
                                 <FileText size={18} /> Content Creator
                             </Link>
-                            {JSON.parse(user || '{}').role === 'ADMIN' && (
+                            {parsedUser?.role === 'ADMIN' && (
                                 <Link to="/admin" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-color)', fontWeight: 'bold', textDecoration: 'none' }}>
                                     <span>⚙️</span> Admin
                                 </Link>
                             )}
-                            <button onClick={handleLogout} className="btn-outline" style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', background: 'transparent', color: 'var(--text-color)' }}>
-                                <LogOut size={16} /> Logout
-                            </button>
+                            
+                            {/* Profile Dropdown */}
+                            <div className="dropdown-container" ref={dropdownRef}>
+                                <button 
+                                    onClick={() => setIsDropdownOpen(!isDropdownOpen)} 
+                                    className="btn-outline" 
+                                    style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', background: isDropdownOpen ? 'rgba(255, 255, 255, 0.05)' : 'transparent', color: 'var(--text-color)' }}
+                                >
+                                    <User size={16} /> 
+                                    {parsedUser?.name || 'Profile'}
+                                    <ChevronDown size={14} style={{ transform: isDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                </button>
+
+                                {isDropdownOpen && (
+                                    <div className="dropdown-menu">
+                                        <div className="dropdown-header">
+                                            <div className="dropdown-header-name">{parsedUser?.name || 'User'}</div>
+                                            <div className="dropdown-header-email">{parsedUser?.email || 'user@example.com'}</div>
+                                        </div>
+                                        
+                                        <button className="dropdown-item" onClick={() => { setIsDropdownOpen(false); alert('Profile settings coming soon!'); }}>
+                                            <Settings size={16} /> Settings
+                                        </button>
+                                        
+                                        <div className="dropdown-divider"></div>
+                                        
+                                        <button className="dropdown-item danger" onClick={handleLogout}>
+                                            <LogOut size={16} /> Logout
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </>
                     ) : (
                         <Link to="/login" className="btn-primary" style={{ padding: '0.5rem 1rem', backgroundColor: 'var(--accent-color)', color: 'white', textDecoration: 'none', borderRadius: '4px' }}>
