@@ -31,11 +31,8 @@ export class TrafficGenerator {
         this.successfulRequests = 0;
         this.failedRequests = 0;
 
-        console.log(`Starting traffic generator against ${this.targetUrl} at ${this.rps} RPS`);
+        console.log(`[Monolith Internal] Starting traffic generator against ${this.targetUrl} at ${this.rps} RPS`);
 
-        // Calculate how many ms to wait between batches to achieve target RPS
-        // We evaluate per second for simplicity, but Node.js setInterval isn't perfect
-        // Better to spread requests over the second. E.g., 100 rps = 1 request every 10ms
         const delayMs = 1000 / this.rps;
 
         this.intervalId = setInterval(() => {
@@ -49,8 +46,8 @@ export class TrafficGenerator {
             this.intervalId = null;
         }
         this.isRunning = false;
-        console.log(`Stopped traffic generator`);
-        console.log(`Final stats: Sent ${this.totalRequestsSent}, Success ${this.successfulRequests}, Failed ${this.failedRequests}`);
+        console.log(`[Monolith Internal] Stopped traffic generator`);
+        console.log(`[Monolith Internal] Final stats: Sent ${this.totalRequestsSent}, Success ${this.successfulRequests}, Failed ${this.failedRequests}`);
     }
 
     getStatus() {
@@ -72,7 +69,6 @@ export class TrafficGenerator {
 
         this.totalRequestsSent++;
 
-        // Determine what kind of request to send simulating a real user flow.
         const randomProduct = SAMPLE_PRODUCTS[Math.floor(Math.random() * SAMPLE_PRODUCTS.length)];
         const roll = Math.random();
 
@@ -119,8 +115,6 @@ export class TrafficGenerator {
             this.successfulRequests++;
         } catch (error: any) {
             this.failedRequests++;
-            // We don't want to spam the console excessively at 500 RPS if the server is down
-            // But we will log occasional errors
             if (this.failedRequests % Math.max(1, Math.floor(this.rps / 2)) === 0) {
                 console.error(`Traffic generation error burst... (Total failures: ${this.failedRequests})`);
             }

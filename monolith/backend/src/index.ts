@@ -11,6 +11,7 @@ import { seedProducts } from './controllers/product';
 import connectDB from './config/db';
 import { telemetryMiddleware } from './middleware/telemetry';
 import adminRoutes from './routes/admin';
+import trafficRoutes from './routes/traffic';
 import { connectRedis } from './config/redis';
 
 dotenv.config();
@@ -33,6 +34,7 @@ app.use('/llm', llmRoutes);
 app.use('/content', contentRoutes);
 app.post('/seed', seedProducts);
 app.use('/admin', adminRoutes);
+app.use('/traffic', trafficRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'Monolith Backend is running' });

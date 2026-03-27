@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Navbar } from '../components/Navbar';
 import { fetchFromAPI } from '../api/client';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import '../styles/main.css';
+
+interface Trial {
+    id: number;
+    rps: number;
+    success: number;
+    fail: number;
+}
 
 interface TrafficStatus {
     isRunning: boolean;
@@ -16,8 +24,17 @@ interface TrafficStatus {
 
 export function TrafficControl() {
     const [status, setStatus] = useState<TrafficStatus | null>(null);
-    const [targetUrl, setTargetUrl] = useState<string>('http://api-gateway:8080');
+    const [targetUrl, setTargetUrl] = useState<string>('http://host.docker.internal:4000');
     const [rps, setRps] = useState<number>(100);
+
+    const [trials, setTrials] = useState<Trial[]>(() => {
+        const saved = localStorage.getItem('monolith_traffic_trials');
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    useEffect(() => {
+        localStorage.setItem('monolith_traffic_trials', JSON.stringify(trials));
+    }, [trials]);
 
     const fetchStatus = async () => {
         try {
@@ -48,7 +65,15 @@ export function TrafficControl() {
 
     const handleStop = async () => {
         try {
-            await fetchFromAPI('/traffic/stop', { method: 'POST' });
+            const response = await fetchFromAPI('/traffic/stop', { method: 'POST' });
+            if (response.config && response.config.metrics) {
+                setTrials(prev => [...prev, {
+                    id: prev.length + 1,
+                    rps: response.config.rps,
+                    success: response.config.metrics.successfulRequests,
+                    fail: response.config.metrics.failedRequests
+                }]);
+            }
             fetchStatus();
         } catch (error) {
             alert('Failed to stop traffic generator');
@@ -73,10 +98,8 @@ export function TrafficControl() {
                                 style={{ width: '100%', padding: '0.75rem', backgroundColor: '#333', color: 'white', border: '1px solid #444', borderRadius: '4px' }}
                                 disabled={status?.isRunning}
                             >
-                                <option value="http://localhost:8080">Microservices (localhost:8080)</option>
-                                <option value="http://localhost:4000">Monolith (localhost:4000)</option>
-                                <option value="http://api-gateway:8080">Docker API Gateway Internal</option>
-                                <option value="http://monolith-backend:4000">Docker Monolith Internal</option>
+                                <option value="http://host.docker.internal:4000">Monolith Backend (host.docker.internal:4000)</option>
+                                <option value="http://api-gateway:8080">Microservices Backend (api-gateway:8080)</option>
                             </select>
                         </div>
 
@@ -136,6 +159,43 @@ export function TrafficControl() {
                                 <div style={{ color: '#f44336', fontSize: '0.875rem' }}>Failed</div>
                                 <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f44336' }}>{status.metrics.failedRequests}</div>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {trials.length > 0 && (
+                    <div className="card" style={{ marginTop: '2rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                            <h2 style={{ margin: 0 }}>Trial History</h2>
+                            <button 
+                                className="btn" 
+                                onClick={() => setTrials([])}
+                                style={{ backgroundColor: '#f44336', padding: '0.5rem 1rem', fontSize: '0.875rem' }}
+                            >
+                                Clear History
+                            </button>
+                        </div>
+                        
+                        <div style={{ height: '300px', width: '100%' }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={trials} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                                    <XAxis dataKey="id" stroke="#888" tickFormatter={(id) => `Trial ${id}`} />
+                                    <YAxis stroke="#888" />
+                                    <Tooltip 
+                                        contentStyle={{ backgroundColor: '#222', borderColor: '#444' }}
+                                        labelFormatter={(label) => `Trial ${label}`}
+                                        formatter={(value: any, name: any, props: any) => {
+                                            const total = props.payload.success + props.payload.fail;
+                                            const ratio = total > 0 ? ((value as number / total) * 100).toFixed(1) + '%' : '0%';
+                                            return [`${value} (${ratio})`, name === 'success' ? `Success (${props.payload.rps} RPS)` : `Fail (${props.payload.rps} RPS)`];
+                                        }}
+                                    />
+                                    <Legend />
+                                    <Bar dataKey="success" stackId="a" fill="#4caf50" name="Success" />
+                                    <Bar dataKey="fail" stackId="a" fill="#f44336" name="Fail" />
+                                </BarChart>
+                            </ResponsiveContainer>
                         </div>
                     </div>
                 )}
