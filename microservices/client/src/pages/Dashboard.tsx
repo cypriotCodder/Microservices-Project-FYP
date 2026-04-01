@@ -43,10 +43,15 @@ export function Dashboard() {
                 const recProductIds = recData.recommendations.map(r => r.productId);
 
                 // Filter products that exist in recommendations
-                const recProducts = allProducts.filter(p => recProductIds.includes(p._id));
+                let recProducts = allProducts.filter(p => recProductIds.includes(p._id));
 
-                // Sort them by the order returned by the recommendation service (highest score first)
-                recProducts.sort((a, b) => recProductIds.indexOf(a._id) - recProductIds.indexOf(b._id));
+                if (recProducts.length === 0 && allProducts.length >= 3) {
+                    // Fallback to top 3 generic products if the user has a fresh account or dummy IDs failed
+                    recProducts = allProducts.slice(0, 3);
+                } else {
+                    // Sort them by the order returned by the recommendation service (highest score first)
+                    recProducts.sort((a, b) => recProductIds.indexOf(a._id) - recProductIds.indexOf(b._id));
+                }
 
                 setRecommendedProducts(recProducts);
             } catch (err) {
@@ -113,6 +118,45 @@ export function Dashboard() {
         return acc;
     }, {} as Record<string, Product[]>);
 
+    const CompactProductCard = ({ product }: { product: Product }) => (
+        <div key={`compact-${product._id}`} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s' }}>
+            <Link to={`/product/${product._id}`} style={{ textDecoration: 'none' }}>
+                <div style={{
+                    width: '60px',
+                    height: '60px',
+                    background: 'linear-gradient(45deg, #222, #333)',
+                    backgroundImage: product.image ? `url(${product.image})` : 'none',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.6rem',
+                    color: '#666'
+                }}>
+                    {!product.image && 'IMG'}
+                </div>
+            </Link>
+            <div style={{ flex: 1 }}>
+                <Link to={`/product/${product._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <h3 style={{ fontSize: '0.9rem', margin: '0 0 0.25rem 0', fontWeight: 600, color: 'var(--text-color)' }}>{product.name}</h3>
+                </Link>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                    <span style={{ color: 'var(--accent-color)', fontWeight: 'bold', fontSize: '0.9rem' }}>${product.price}</span>
+                    <button 
+                        onClick={() => handleOrder(product)}
+                        disabled={product.stock === 0}
+                        style={{ background: 'transparent', border: 'none', color: product.stock > 0 ? 'var(--text-color)' : '#555', cursor: product.stock > 0 ? 'pointer' : 'not-allowed', fontSize: '1.2rem', padding: '0 0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="Quick Add"
+                    >
+                        +
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+
     const ProductCard = ({ product }: { product: Product }) => (
         <div key={product._id} className="card">
             <Link to={`/product/${product._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -160,12 +204,12 @@ export function Dashboard() {
                     <>
                         {/* Recommendations Section */}
                         {recommendedProducts.length > 0 && selectedCategory === 'All' && (
-                            <div style={{ marginBottom: '4rem', padding: '2rem', background: 'rgba(99, 102, 241, 0.05)', borderRadius: '12px', border: '1px solid var(--accent-color)' }}>
-                                <h2 style={{ fontSize: '2rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-color)' }}>
-                                    <span style={{ fontSize: '1.5rem' }}>✨</span> Recommended for You
+                            <div style={{ marginBottom: '4rem', marginTop: '2rem' }}>
+                                <h2 style={{ fontSize: '1.4rem', fontWeight: 500, marginBottom: '1.5rem', color: 'var(--text-color)', letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.7 }}>
+                                    Recommended for You
                                 </h2>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '2rem' }}>
-                                    {recommendedProducts.map(p => <ProductCard key={`rec-${p._id}`} product={p} />)}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1rem' }}>
+                                    {recommendedProducts.map(p => <CompactProductCard key={`rec-${p._id}`} product={p} />)}
                                 </div>
                             </div>
                         )}

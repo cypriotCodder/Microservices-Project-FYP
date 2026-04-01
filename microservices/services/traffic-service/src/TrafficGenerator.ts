@@ -19,6 +19,7 @@ export class TrafficGenerator {
     private totalRequestsSent = 0;
     private successfulRequests = 0;
     private failedRequests = 0;
+    private failuresByService: Record<string, number> = { auth: 0, products: 0, llm: 0, orders: 0 };
 
     start(targetUrl: string, rps: number) {
         this.stop(); // Clear any existing runs
@@ -30,6 +31,7 @@ export class TrafficGenerator {
         this.totalRequestsSent = 0;
         this.successfulRequests = 0;
         this.failedRequests = 0;
+        this.failuresByService = { auth: 0, products: 0, llm: 0, orders: 0 };
 
         console.log(`Starting traffic generator against ${this.targetUrl} at ${this.rps} RPS`);
 
@@ -62,6 +64,7 @@ export class TrafficGenerator {
                 totalRequestsSent: this.totalRequestsSent,
                 successfulRequests: this.successfulRequests,
                 failedRequests: this.failedRequests,
+                failuresByService: this.failuresByService
             }
         };
     }
@@ -75,29 +78,34 @@ export class TrafficGenerator {
         // Determine what kind of request to send simulating a real user flow.
         const randomProduct = SAMPLE_PRODUCTS[Math.floor(Math.random() * SAMPLE_PRODUCTS.length)];
         const roll = Math.random();
+        let currentService = 'unknown';
 
         try {
             if (roll < 0.40) {
+                currentService = 'products';
                 // Fetch Catalog (40%)
                 await axios.get(`${this.targetUrl}/products`, { timeout: 5000 });
             } else if (roll < 0.55) {
+                currentService = 'products';
                 // Click Product Details (15%)
                 await axios.get(`${this.targetUrl}/products/${randomProduct}`, { timeout: 5000 });
             } else if (roll < 0.60) {
+                currentService = 'auth';
                 // Sign Up New User (5% - Stresses DB Writes)
                 const randomIdent = `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
                 await axios.post(`${this.targetUrl}/auth/register`, {
-                    name: 'LoadTest User',
-                    email: `loadtest_${randomIdent}@test.com`,
+                    username: `loadtest_${randomIdent}`,
                     password: 'password123'
                 }, { timeout: 5000 });
             } else if (roll < 0.70) {
+                currentService = 'auth';
                 // Sign In Existing User (10% - Stresses CPU / bcrypt)
                 await axios.post(`${this.targetUrl}/auth/login`, {
-                    email: `admin@fyp.com`,
+                    username: `admin@fyp.com`,
                     password: 'admin'
                 }, { timeout: 5000 });
             } else if (roll < 0.80) {
+                currentService = 'llm';
                 // Predict/Summarize Product (10%)
                 const prodRes = await axios.get(`${this.targetUrl}/products/${randomProduct}`, { timeout: 5000 });
                 const prodDesc = prodRes.data?.description || "A standard e-commerce item.";
@@ -106,9 +114,11 @@ export class TrafficGenerator {
                     text: prodDesc
                 }, { timeout: 15000 });
             } else if (roll < 0.90) {
+                currentService = 'orders';
                 // Fetch Orders (10%)
                 await axios.get(`${this.targetUrl}/orders`, { timeout: 5000 });
             } else {
+                currentService = 'orders';
                 // Checkout / Buy Product! (10%)
                 await axios.post(`${this.targetUrl}/orders`, {
                     userId: SAMPLE_USER_ID,
@@ -119,6 +129,13 @@ export class TrafficGenerator {
             this.successfulRequests++;
         } catch (error: any) {
             this.failedRequests++;
+            if (this.failuresByService[currentService] !== undefined) {
+                this.failuresByService[currentService]++;
+            } else {
+                // If for some reason currentService is not one of the predefined keys,
+                // initialize it or handle as 'unknown'
+                this.failuresByService[currentService] = 1;
+            }
             // We don't want to spam the console excessively at 500 RPS if the server is down
             // But we will log occasional errors
             if (this.failedRequests % Math.max(1, Math.floor(this.rps / 2)) === 0) {

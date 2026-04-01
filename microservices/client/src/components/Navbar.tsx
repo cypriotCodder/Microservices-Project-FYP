@@ -44,9 +44,7 @@ export function Navbar() {
                             <Link to="/orders" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', textDecoration: 'none' }}>
                                 <ShoppingCart size={18} /> Orders
                             </Link>
-                            <Link to="/traffic" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', textDecoration: 'none' }}>
-                                <span>🚦</span> Traffic
-                            </Link>
+
                             <Link to="/content" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', textDecoration: 'none' }}>
                                 <FileText size={18} /> Content Creator
                             </Link>

@@ -9,6 +9,7 @@ interface Trial {
     rps: number;
     success: number;
     fail: number;
+    failuresByService?: Record<string, number>;
 }
 
 interface TrafficStatus {
@@ -71,7 +72,8 @@ export function TrafficControl() {
                     id: prev.length + 1,
                     rps: response.config.rps,
                     success: response.config.metrics.successfulRequests,
-                    fail: response.config.metrics.failedRequests
+                    fail: response.config.metrics.failedRequests,
+                    failuresByService: response.config.metrics.failuresByService
                 }]);
             }
             fetchStatus();
@@ -79,6 +81,17 @@ export function TrafficControl() {
             alert('Failed to stop traffic generator');
         }
     };
+
+    const chartData = trials.map(t => ({
+        id: t.id,
+        rps: t.rps,
+        success: t.success,
+        fail: t.fail,
+        auth: t.failuresByService?.auth || 0,
+        products: t.failuresByService?.products || 0,
+        llm: t.failuresByService?.llm || 0,
+        orders: t.failuresByService?.orders || 0,
+    }));
 
     return (
         <div>
@@ -178,7 +191,7 @@ export function TrafficControl() {
                         
                         <div style={{ height: '300px', width: '100%' }}>
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={trials} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                                     <XAxis dataKey="id" stroke="#888" tickFormatter={(id) => `Trial ${id}`} />
                                     <YAxis stroke="#888" />
@@ -196,6 +209,29 @@ export function TrafficControl() {
                                     <Bar dataKey="fail" stackId="a" fill="#f44336" name="Fail" />
                                 </BarChart>
                             </ResponsiveContainer>
+                        </div>
+                        
+                        <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+                            <h3 style={{ marginBottom: '1rem', color: '#ff9800' }}>Service Failure Breakdown</h3>
+                            <div style={{ height: '300px', width: '100%' }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                                        <XAxis dataKey="id" stroke="#888" tickFormatter={(id) => `Trial ${id}`} />
+                                        <YAxis stroke="#888" />
+                                        <Tooltip 
+                                            contentStyle={{ backgroundColor: '#222', borderColor: '#444' }}
+                                            labelFormatter={(label) => `Trial ${label}`}
+                                            formatter={(value: any, name: any) => [value, name]}
+                                        />
+                                        <Legend />
+                                        <Bar dataKey="auth" stackId="b" fill="#e91e63" name="Auth" />
+                                        <Bar dataKey="products" stackId="b" fill="#00bcd4" name="Products" />
+                                        <Bar dataKey="llm" stackId="b" fill="#ff9800" name="LLM" />
+                                        <Bar dataKey="orders" stackId="b" fill="#9c27b0" name="Orders" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                     </div>
                 )}

@@ -20,7 +20,7 @@ app.get('/health', (req, res) => {
     res.json({ status: 'Recommendation Service is running' });
 });
 
-app.get('/recommendations/:userId', async (req, res) => {
+app.get('/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
         // Simple logic: return recent recommendations for this user
@@ -50,7 +50,7 @@ app.get('/recommendations/:userId', async (req, res) => {
     }
 });
 
-app.post('/recommendations/click', async (req, res) => {
+app.post('/click', async (req, res) => {
     // Endpoint to track user clicks/views on products
     const { userId, productId } = req.body;
     try {
@@ -78,7 +78,7 @@ app.post('/recommendations/click', async (req, res) => {
     }
 });
 
-app.post('/recommendations', async (req, res) => {
+app.post('/', async (req, res) => {
     // Endpoint to seed/add recommendations (e.g. from Python ML service)
     const { userId, productId, score } = req.body;
     try {
