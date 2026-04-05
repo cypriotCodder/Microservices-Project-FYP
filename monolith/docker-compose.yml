@@ -6,8 +6,11 @@ services:
       - "4000:4000"
     env_file: ./backend/.env
     environment:
-      - MONGO_URI=mongodb+srv://nedim:8011@fyp.aubab4u.mongodb.net/?appName=FYP
+      - DATABASE_URL=postgresql://postgres:8011nedimK216@postgres:5432/monolith_db?schema=public
       - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
 
   monolith-client:
     build: ./client

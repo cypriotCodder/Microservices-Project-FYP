@@ -1,6 +1,5 @@
 import { Router } from 'express';
-import { Product } from '../models/products';
-import { Review } from '../models/review';
+import { prisma } from '../config/prisma';
 import { redisClient } from '../config/redis';
 
 const router = Router();
@@ -9,6 +8,7 @@ router.get('/health', (req, res) => {
     res.json({ status: 'Product Module is running' });
 });
 
+// GET all products (with Redis cache)
 router.get('/', async (req, res) => {
     try {
         const cachedProducts = await redisClient.get('products:all');
@@ -16,8 +16,8 @@ router.get('/', async (req, res) => {
             return res.json(JSON.parse(cachedProducts));
         }
 
-        const products = await Product.find();
-        
+        const products = await prisma.product.findMany({ orderBy: { createdAt: 'desc' } });
+
         await redisClient.setEx('products:all', 3600, JSON.stringify(products));
         res.json(products);
     } catch (error) {
@@ -25,17 +25,21 @@ router.get('/', async (req, res) => {
     }
 });
 
+// GET single product by ID
 router.get('/:id', async (req, res) => {
     try {
-        const cacheKey = `product:${req.params.id}`;
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) return res.status(400).json({ message: 'Invalid product ID' });
+
+        const cacheKey = `product:${id}`;
         const cachedProduct = await redisClient.get(cacheKey);
         if (cachedProduct) {
             return res.json(JSON.parse(cachedProduct));
         }
 
-        const product = await Product.findById(req.params.id);
+        const product = await prisma.product.findUnique({ where: { id } });
         if (!product) return res.status(404).json({ message: 'Product not found' });
-        
+
         await redisClient.setEx(cacheKey, 3600, JSON.stringify(product));
         res.json(product);
     } catch (error) {
@@ -43,9 +47,13 @@ router.get('/:id', async (req, res) => {
     }
 });
 
+// POST create product
 router.post('/', async (req, res) => {
     try {
-        const product = await Product.create(req.body);
+        const { name, price, description, stock, image, category } = req.body;
+        const product = await prisma.product.create({
+            data: { name, price: parseFloat(price), description, stock: parseInt(stock) || 0, image, category }
+        });
         await redisClient.del('products:all');
         res.status(201).json({ message: 'Product created', product });
     } catch (error) {
@@ -53,31 +61,46 @@ router.post('/', async (req, res) => {
     }
 });
 
+// DELETE all products (and their reviews via cascade)
 router.delete('/all', async (req, res) => {
     try {
-        await Product.deleteMany({});
-        await Review.deleteMany({}); // Clean up orphaned reviews
-        await redisClient.del('products:all'); // Invalidate cache
-        res.json({ message: 'All products and reviews seamlessly wiped from database' });
+        await prisma.review.deleteMany({});
+        await prisma.orderItem.deleteMany({});
+        await prisma.order.deleteMany({});
+        await prisma.product.deleteMany({});
+        await redisClient.del('products:all');
+        res.json({ message: 'All products, reviews, and orders seamlessly wiped from database' });
     } catch (error) {
         res.status(500).json({ message: 'Failed to delete products', error });
     }
 });
 
+// POST create review for a product
 router.post('/:productId/reviews', async (req, res) => {
     try {
-        const { productId } = req.params;
-        const reviewData = { ...req.body, productId };
-        const review = await Review.create(reviewData);
+        const productId = parseInt(req.params.productId);
+        if (isNaN(productId)) return res.status(400).json({ message: 'Invalid product ID' });
+
+        const { userId, title, content, rating } = req.body;
+        const review = await prisma.review.create({
+            data: { productId, userId, title, content, rating: parseInt(rating) }
+        });
         res.status(201).json({ message: 'Review created', review });
     } catch (error) {
         res.status(500).json({ message: 'Failed to create review', error });
     }
 });
 
+// GET reviews for a product
 router.get('/:productId/reviews', async (req, res) => {
     try {
-        const reviews = await Review.find({ productId: req.params.productId }).sort({ createdAt: -1 });
+        const productId = parseInt(req.params.productId);
+        if (isNaN(productId)) return res.status(400).json({ message: 'Invalid product ID' });
+
+        const reviews = await prisma.review.findMany({
+            where: { productId },
+            orderBy: { createdAt: 'desc' }
+        });
         res.json(reviews);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching reviews', error });

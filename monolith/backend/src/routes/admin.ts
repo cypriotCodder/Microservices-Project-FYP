@@ -2,75 +2,55 @@ import { Router } from 'express';
 import { requireAdmin } from '../middleware/requireAdmin';
 import { getAggregatedMetrics } from '../middleware/telemetry';
 import { prisma } from '../config/prisma';
-import { Order } from '../models/orders';
-import { Product } from '../models/products';
 
 const router = Router();
 
 router.get('/metrics', requireAdmin, async (req, res) => {
     try {
-        // 1. Fetch total users
-        let totalUsers = 0;
-        try {
-            totalUsers = await prisma.user.count();
-        } catch (e) { console.error('Failed to fetch user count in monolith', e); }
+        // 1. Total users
+        const totalUsers = await prisma.user.count();
 
-        // 2. Fetch order metrics
-        let totalOrders = 0;
-        let totalRevenue = 0;
-        let topProductsRaw: any[] = [];
-        let ordersPerMinute: any[] = [];
+        // 2. Order metrics
+        const totalOrders = await prisma.order.count();
 
-        try {
-            totalOrders = await Order.countDocuments();
+        const revenueAgg = await prisma.order.aggregate({ _sum: { totalAmount: true } });
+        const totalRevenue = revenueAgg._sum.totalAmount || 0;
 
-            const revenueAgg = await Order.aggregate([{ $group: { _id: null, total: { $sum: "$totalAmount" } } }]);
-            totalRevenue = revenueAgg[0]?.total || 0;
+        // 3. Top products by units sold
+        const topProductsRaw = await prisma.orderItem.groupBy({
+            by: ['productId'],
+            _sum: { quantity: true },
+            orderBy: { _sum: { quantity: 'desc' } },
+            take: 10
+        });
 
-            topProductsRaw = await Order.aggregate([
-                { $unwind: "$products" },
-                { $group: { _id: "$products.productId", totalSold: { $sum: "$products.quantity" } } },
-                { $sort: { totalSold: -1 } },
-                { $limit: 10 }
-            ]);
+        const enrichedTopProducts = await Promise.all(
+            topProductsRaw.map(async (item) => {
+                const product = await prisma.product.findUnique({ where: { id: item.productId } });
+                return {
+                    _id: item.productId,
+                    name: product?.name || 'Unknown Product',
+                    price: product?.price,
+                    totalSold: item._sum.quantity || 0
+                };
+            })
+        );
 
-            const lastHour = new Date(Date.now() - 60 * 60 * 1000);
-            ordersPerMinute = await Order.aggregate([
-                { $match: { createdAt: { $gte: lastHour } } },
-                {
-                    $group: {
-                        _id: { $dateTrunc: { date: "$createdAt", unit: "minute" } },
-                        count: { $sum: 1 }
-                    }
-                },
-                { $sort: { _id: 1 } }
-            ]);
-        } catch (e) { console.error('Failed to fetch order metrics in monolith', e); }
+        // 4. Orders per minute (last hour) — raw SQL for time-bucket grouping
+        const lastHour = new Date(Date.now() - 60 * 60 * 1000);
+        const ordersPerMinute: any[] = await prisma.$queryRaw`
+            SELECT
+                DATE_TRUNC('minute', "createdAt") AS "_id",
+                COUNT(*)::int AS count
+            FROM "Order"
+            WHERE "createdAt" >= ${lastHour}
+            GROUP BY DATE_TRUNC('minute', "createdAt")
+            ORDER BY "_id" ASC
+        `;
 
-        // 3. Fetch product details for top products to map names and prices natively
-        const enrichedTopProducts = [];
-        for (const item of topProductsRaw) {
-            try {
-                const prod = await Product.findById(item._id);
-                if (prod) {
-                    enrichedTopProducts.push({
-                        _id: item._id,
-                        name: prod.name,
-                        price: prod.price,
-                        totalSold: item.totalSold
-                    });
-                } else {
-                    enrichedTopProducts.push({ _id: item._id, name: 'Unknown Product', totalSold: item.totalSold });
-                }
-            } catch (e) {
-                enrichedTopProducts.push({ _id: item._id, name: 'Error Fetching', totalSold: item.totalSold });
-            }
-        }
-
-        // 4. Extract own telemetry metrics
+        // 5. Telemetry
         const systemTelemetry = getAggregatedMetrics();
 
-        // 5. Combine and send payload structurally identical to API Gateway Payload
         res.json({
             users: totalUsers,
             orders: totalOrders,

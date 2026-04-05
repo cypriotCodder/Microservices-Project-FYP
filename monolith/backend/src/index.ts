@@ -8,15 +8,12 @@ import recommendationRoutes from './routes/recommendations';
 import llmRoutes from './routes/llm';
 import contentRoutes from './routes/content';
 import { seedProducts } from './controllers/product';
-import connectDB from './config/db';
 import { telemetryMiddleware } from './middleware/telemetry';
 import adminRoutes from './routes/admin';
 import trafficRoutes from './routes/traffic';
 import { connectRedis } from './config/redis';
 
 dotenv.config();
-
-connectDB();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -37,10 +34,11 @@ app.use('/admin', adminRoutes);
 app.use('/traffic', trafficRoutes);
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'Monolith Backend is running' });
+    res.json({ status: 'Monolith Backend is running', db: 'PostgreSQL' });
 });
 
 app.listen(PORT, async () => {
     await connectRedis();
-    console.log(`Monolith Backend running on port ${PORT}`);
+    console.log(`🚀 Monolith Backend running on port ${PORT}`);
+    console.log(`🐘 Database: PostgreSQL (Prisma)`);
 });

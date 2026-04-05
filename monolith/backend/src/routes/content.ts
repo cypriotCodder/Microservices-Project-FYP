@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import axios from 'axios';
-import { Product } from '../models/products';
-import { Review } from '../models/review';
+import { prisma } from '../config/prisma';
 import { redisClient } from '../config/redis';
 
 const router = Router();
@@ -15,6 +14,7 @@ function getRandomElement(arr: any[]): any {
     return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// POST generate a new random product (with optional LLM description)
 router.post('/generate-product', async (req, res) => {
     const { lengthText = '2 sentences' } = req.body;
     const name = `${getRandomElement(adjectives)} ${getRandomElement(nouns)}`;
@@ -52,11 +52,8 @@ router.post('/generate-product', async (req, res) => {
     }
 
     try {
-        const product = await Product.create({
-            name,
-            price,
-            description,
-            stock
+        const product = await prisma.product.create({
+            data: { name, price, description, stock }
         });
         await redisClient.del('products:all');
         res.status(201).json({ message: 'Product created', data: product });
@@ -66,9 +63,10 @@ router.post('/generate-product', async (req, res) => {
     }
 });
 
+// POST generate a random review for a random existing product
 router.post('/generate-review', async (req, res) => {
     try {
-        const products = await Product.find();
+        const products = await prisma.product.findMany();
         if (!products || products.length === 0) {
             return res.status(400).json({ message: "No products available to review." });
         }
@@ -79,12 +77,14 @@ router.post('/generate-review', async (req, res) => {
         const rating = Math.floor(Math.random() * 5) + 1;
         const userId = `user_${Math.floor(Math.random() * 9000) + 1000}`;
 
-        const review = await Review.create({
-            productId: randomProduct._id,
-            userId,
-            title,
-            content,
-            rating
+        const review = await prisma.review.create({
+            data: {
+                productId: randomProduct.id,
+                userId,
+                title,
+                content,
+                rating
+            }
         });
 
         res.status(201).json({ message: 'Review created', data: review });
