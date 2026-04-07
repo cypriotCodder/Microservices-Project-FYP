@@ -33,7 +33,7 @@ router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, functio
         const user = yield prisma_1.prisma.user.create({
             data: { username, password: hashedPassword },
         });
-        res.status(201).json({ message: 'User created successfully', userId: user.id });
+        res.status(201).json({ message: 'User created successfully', userId: user.id, role: user.role });
     }
     catch (error) {
         console.error('Register error:', error);
@@ -51,11 +51,20 @@ router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* 
         if (!isMatch) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
-        const token = jsonwebtoken_1.default.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: '1h' });
-        res.json({ token, userId: user.id, username: user.username });
+        const token = jsonwebtoken_1.default.sign({ sub: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '1h' });
+        res.json({ token, userId: user.id, username: user.username, role: user.role });
     }
     catch (error) {
         console.error('Login error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}));
+router.get('/admin/users/count', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const count = yield prisma_1.prisma.user.count();
+        res.json({ count });
+    }
+    catch (error) {
         res.status(500).json({ message: 'Internal server error' });
     }
 }));

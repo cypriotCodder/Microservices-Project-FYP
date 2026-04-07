@@ -10,29 +10,180 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const products_1 = require("../models/products");
+const prisma_1 = require("../config/prisma");
+const redis_1 = require("../config/redis");
 const router = (0, express_1.Router)();
 router.get('/health', (req, res) => {
     res.json({ status: 'Order Module is running' });
 });
-router.get('/', (req, res) => {
-    res.json([
-        { id: 1, productId: 1, quantity: 1, status: 'pending' }
-    ]);
-});
-router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const order = req.body;
+// GET admin order metrics
+router.get('/admin/metrics', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        // Directly decrement stock in the same request for monolith
-        if (order.products && Array.isArray(order.products)) {
-            for (const item of order.products) {
-                yield products_1.Product.updateOne({ _id: item.productId }, { $inc: { stock: -item.quantity } });
-            }
-        }
-        res.status(201).json({ message: 'Order created', order });
+        const totalOrders = yield prisma_1.prisma.order.count();
+        const revenueAgg = yield prisma_1.prisma.order.aggregate({ _sum: { totalAmount: true } });
+        const totalRevenue = revenueAgg._sum.totalAmount || 0;
+        // Top products by units sold
+        const topProductsRaw = yield prisma_1.prisma.orderItem.groupBy({
+            by: ['productId'],
+            _sum: { quantity: true },
+            orderBy: { _sum: { quantity: 'desc' } },
+            take: 10
+        });
+        const topProducts = yield Promise.all(topProductsRaw.map((item) => __awaiter(void 0, void 0, void 0, function* () {
+            const product = yield prisma_1.prisma.product.findUnique({ where: { id: item.productId } });
+            return {
+                _id: item.productId,
+                name: (product === null || product === void 0 ? void 0 : product.name) || 'Unknown Product',
+                price: product === null || product === void 0 ? void 0 : product.price,
+                totalSold: item._sum.quantity || 0
+            };
+        })));
+        // Orders per minute in the last hour (raw SQL for time-bucket grouping)
+        const lastHour = new Date(Date.now() - 60 * 60 * 1000);
+        const ordersPerMinute = yield prisma_1.prisma.$queryRaw `
+            SELECT
+                DATE_TRUNC('minute', "createdAt") AS "_id",
+                COUNT(*)::int AS count
+            FROM "Order"
+            WHERE "createdAt" >= ${lastHour}
+            GROUP BY DATE_TRUNC('minute', "createdAt")
+            ORDER BY "_id" ASC
+        `;
+        res.json({ totalOrders, totalRevenue, topProducts, ordersPerMinute });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to fetch admin order metrics' });
+    }
+}));
+// GET orders for a specific user
+router.get('/:userId', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const orders = yield prisma_1.prisma.order.findMany({
+            where: { userId: req.params.userId },
+            include: { items: { include: { product: true } } },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(orders);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Error fetching orders', error });
+    }
+}));
+// POST create order (add to cart / PENDING)
+router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { userId, totalAmount, products } = req.body;
+    try {
+        // Validate all product IDs exist
+        const productIds = products.map((p) => parseInt(p.productId));
+        const newOrder = yield prisma_1.prisma.order.create({
+            data: {
+                userId: String(userId),
+                totalAmount: parseFloat(totalAmount),
+                status: 'PENDING',
+                items: {
+                    create: products.map((p) => ({
+                        productId: parseInt(p.productId),
+                        quantity: parseInt(p.quantity)
+                    }))
+                }
+            },
+            include: { items: true }
+        });
+        res.status(201).json({ message: 'Order created', order: newOrder });
     }
     catch (error) {
         res.status(500).json({ message: 'Internal server error', error });
+    }
+}));
+// DELETE single order (and refund stock)
+router.delete('/:id', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const orderId = parseInt(req.params.id);
+        if (isNaN(orderId))
+            return res.status(400).json({ message: 'Invalid order ID' });
+        const order = yield prisma_1.prisma.order.findUnique({
+            where: { id: orderId },
+            include: { items: true }
+        });
+        if (!order)
+            return res.status(404).json({ message: 'Order not found' });
+        // Refund stock for each item
+        for (const item of order.items) {
+            yield prisma_1.prisma.product.update({
+                where: { id: item.productId },
+                data: { stock: { increment: item.quantity } }
+            });
+            yield redis_1.redisClient.del(`product:${item.productId}`);
+        }
+        yield redis_1.redisClient.del('products:all');
+        yield prisma_1.prisma.order.delete({ where: { id: orderId } }); // cascade deletes OrderItems
+        res.status(200).json({ message: 'Order deleted and stock refunded' });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Failed to delete order', error });
+    }
+}));
+// DELETE all orders for a user (and refund stock)
+router.delete('/all/:userId', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { userId } = req.params;
+        const orders = yield prisma_1.prisma.order.findMany({
+            where: { userId },
+            include: { items: true }
+        });
+        let stockRefunded = false;
+        for (const order of orders) {
+            for (const item of order.items) {
+                yield prisma_1.prisma.product.update({
+                    where: { id: item.productId },
+                    data: { stock: { increment: item.quantity } }
+                });
+                yield redis_1.redisClient.del(`product:${item.productId}`);
+                stockRefunded = true;
+            }
+        }
+        if (stockRefunded) {
+            yield redis_1.redisClient.del('products:all');
+        }
+        yield prisma_1.prisma.order.deleteMany({ where: { userId } });
+        res.status(200).json({ message: 'All orders deleted and stock refunded' });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Failed to delete all orders', error });
+    }
+}));
+// POST finalize purchase (checkout / COMPLETED)
+router.post('/:id/buy', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const orderId = parseInt(req.params.id);
+        if (isNaN(orderId))
+            return res.status(400).json({ message: 'Invalid order ID' });
+        const order = yield prisma_1.prisma.order.findUnique({
+            where: { id: orderId },
+            include: { items: true }
+        });
+        if (!order)
+            return res.status(404).json({ message: 'Order not found' });
+        if (order.status === 'COMPLETED') {
+            return res.status(400).json({ message: 'Order is already completed' });
+        }
+        // Decrement stock for each item
+        for (const item of order.items) {
+            yield prisma_1.prisma.product.update({
+                where: { id: item.productId },
+                data: { stock: { decrement: item.quantity } }
+            });
+            yield redis_1.redisClient.del(`product:${item.productId}`);
+        }
+        yield redis_1.redisClient.del('products:all');
+        const updatedOrder = yield prisma_1.prisma.order.update({
+            where: { id: orderId },
+            data: { status: 'COMPLETED' }
+        });
+        res.status(200).json({ message: 'Order completed and products removed', order: updatedOrder });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Failed to complete checkout', error });
     }
 }));
 exports.default = router;

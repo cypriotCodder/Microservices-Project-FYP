@@ -43,6 +43,34 @@ router.get('/:userId', (req, res) => __awaiter(void 0, void 0, void 0, function*
         res.status(500).json({ message: "Internal server error" });
     }
 }));
+router.post('/click', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    // Endpoint to track user clicks/views on products
+    const { userId, productId } = req.body;
+    try {
+        const existingRec = yield prisma_1.prisma.recommendation.findFirst({
+            where: { userId, productId }
+        });
+        if (existingRec) {
+            // Increment score by 1 for an additional click/view
+            const updatedRec = yield prisma_1.prisma.recommendation.update({
+                where: { id: existingRec.id },
+                data: { score: existingRec.score + 1 }
+            });
+            return res.status(200).json(updatedRec);
+        }
+        else {
+            // New interaction gets a score of 1
+            const newRec = yield prisma_1.prisma.recommendation.create({
+                data: { userId, productId, score: 1 }
+            });
+            return res.status(201).json(newRec);
+        }
+    }
+    catch (error) {
+        console.error("Error tracking product click:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+}));
 router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     // Endpoint to seed/add recommendations (e.g. from Python ML service)
     const { userId, productId, score } = req.body;

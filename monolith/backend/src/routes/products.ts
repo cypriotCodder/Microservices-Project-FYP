@@ -107,4 +107,37 @@ router.get('/:productId/reviews', async (req, res) => {
     }
 });
 
+// GET comments for a product (Synchronous read)
+router.get('/:productId/comments', async (req, res) => {
+    try {
+        const productId = parseInt(req.params.productId);
+        if (isNaN(productId)) return res.status(400).json({ message: 'Invalid product ID' });
+
+        const comments = await prisma.comment.findMany({
+            where: { productId },
+            orderBy: { createdAt: 'desc' },
+            take: 50
+        });
+        res.json(comments);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching comments', error });
+    }
+});
+
+// POST create comment for a product (Synchronous - intentionally bottlenecked)
+router.post('/:productId/comments', async (req, res) => {
+    try {
+        const productId = parseInt(req.params.productId);
+        if (isNaN(productId)) return res.status(400).json({ message: 'Invalid product ID' });
+
+        const { userId, content } = req.body;
+        const comment = await prisma.comment.create({
+            data: { productId, userId: String(userId), content }
+        });
+        res.status(201).json({ message: 'Comment created', comment });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to create comment', error });
+    }
+});
+
 export default router;

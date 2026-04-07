@@ -1,5 +1,6 @@
 import amqp, { Channel, ChannelModel } from "amqplib";
 import { Product } from "../models/product";
+import { Comment } from "../models/comment";
 import { redisClient } from "../config/redis";
 
 let connection: ChannelModel | null = null;
@@ -86,6 +87,64 @@ export const consumeOrderBoughtEvents = async () => {
       } catch (error) {
         console.error("Error processing ORDER_BOUGHT event:", error);
         // If it fails, we don't acknowledge, so RabbitMQ can requeue it or move it to a dead-letter queue
+      }
+    }
+  });
+};
+
+// --- Comments Event Logic ---
+
+export const publishCommentCreatedEvent = async (commentData: any) => {
+  if (!channel) {
+    console.error('Cannot publish CommentCreated: Channel is null');
+    return;
+  }
+  channel.sendToQueue('COMMENT_CREATED', Buffer.from(JSON.stringify(commentData)), { persistent: true });
+};
+
+export const consumeCommentCreatedEvents = async () => {
+  if (!channel) return;
+
+  // Set up Dead Letter Exchange and Queue
+  await channel.assertExchange('dlx_exchange', 'direct', { durable: true });
+  await channel.assertQueue('COMMENT_DLQ', { durable: true });
+  await channel.bindQueue('COMMENT_DLQ', 'dlx_exchange', 'dlq_routing_key');
+
+  // Assert main queue pointing to DLX for rejects
+  await channel.assertQueue('COMMENT_CREATED', {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': 'dlx_exchange',
+      'x-dead-letter-routing-key': 'dlq_routing_key'
+    }
+  });
+
+  console.log("Listening for COMMENT_CREATED events...");
+
+  channel!.consume("COMMENT_CREATED", async (msg) => {
+    if (msg !== null) {
+      try {
+        const data = JSON.parse(msg.content.toString());
+
+        // 1. Insert into MongoDB
+        const comment = await Comment.create({
+          productId: data.productId,
+          userId: data.userId,
+          content: data.content
+        });
+
+        // 2. Add to Redis List for fast reads
+        const redisKey = `product:${data.productId}:comments:recent`;
+        await redisClient.lPush(redisKey, JSON.stringify(comment));
+        await redisClient.lTrim(redisKey, 0, 49); // Keep top 50
+        await redisClient.expire(redisKey, 3600); // 1 hr TTL
+
+        // 3. Manual Ack
+        channel!.ack(msg);
+      } catch (error) {
+        console.error("Error processing COMMENT_CREATED:", error);
+        // NACK, send to DLQ instead of endlessly requeuing
+        channel!.nack(msg, false, false);
       }
     }
   });

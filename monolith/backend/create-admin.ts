@@ -1,9 +1,11 @@
 import { PrismaClient } from '@prisma/client';
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
 
-const prisma = new PrismaClient({
-    datasources: { db: { url: 'postgresql://postgres:8011nedimK216@localhost:5433/monolith_db?schema=public' } }
-});
+const pool = new Pool({ connectionString: 'postgresql://postgres:8011nedimK216@localhost:5433/monolith_db?schema=public' });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
     const salt = await bcrypt.genSalt(10);

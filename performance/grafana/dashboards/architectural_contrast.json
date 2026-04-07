@@ -1,0 +1,529 @@
+{
+  "annotations": { "list": [] },
+  "description": "Side-by-side Monolith vs Microservices stress test. Run k6 with --tag arch=microservices and --tag arch=monolith simultaneously.",
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 1,
+  "links": [],
+  "refresh": "5s",
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["k6", "architecture", "stress-test"],
+  "title": "Architectural Contrast Benchmark",
+  "uid": "arch_contrast_v3",
+  "version": 1,
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "panels": [
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "── Headline Stats ─────────────────────────────────────────────",
+      "type": "row"
+    },
+
+    {
+      "datasource": "myk6",
+      "description": "Combined active VUs across both test runs",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "blue", "value": null },
+            { "color": "yellow", "value": 500 },
+            { "color": "red", "value": 900 }
+          ]}
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "targets": [{
+        "rawQuery": true,
+        "query": "SELECT last(\"value\") FROM \"vus\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+        "refId": "A",
+        "resultFormat": "time_series"
+      }],
+      "title": "Active VUs (total)",
+      "type": "stat"
+    },
+
+    {
+      "datasource": "myk6",
+      "description": "Microservices: P95 latency across all requests",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "ms",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 500 },
+            { "color": "red", "value": 1000 }
+          ]}
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 5, "x": 4, "y": 1 },
+      "id": 2,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "targets": [{
+        "rawQuery": true,
+        "query": "SELECT percentile(\"value\", 95) FROM \"http_req_duration\" WHERE \"arch\" = 'microservices' AND $timeFilter GROUP BY time($__interval) fill(null)",
+        "refId": "A",
+        "resultFormat": "time_series"
+      }],
+      "title": "Microservices P95",
+      "type": "stat"
+    },
+
+    {
+      "datasource": "myk6",
+      "description": "Microservices: total failed requests in window",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 10 },
+            { "color": "red", "value": 100 }
+          ]}
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 5, "x": 9, "y": 1 },
+      "id": 3,
+      "options": {
+        "reduceOptions": { "calcs": ["sum"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "targets": [{
+        "rawQuery": true,
+        "query": "SELECT sum(\"value\") FROM \"http_req_failed\" WHERE \"arch\" = 'microservices' AND $timeFilter GROUP BY time($__interval) fill(0)",
+        "refId": "A",
+        "resultFormat": "time_series"
+      }],
+      "title": "Microservices Errors",
+      "type": "stat"
+    },
+
+    {
+      "datasource": "myk6",
+      "description": "Monolith: P95 latency — watch this climb past 1000ms under stress",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "ms",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 500 },
+            { "color": "red", "value": 1000 }
+          ]}
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 5, "x": 14, "y": 1 },
+      "id": 4,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "targets": [{
+        "rawQuery": true,
+        "query": "SELECT percentile(\"value\", 95) FROM \"http_req_duration\" WHERE \"arch\" = 'monolith' AND $timeFilter GROUP BY time($__interval) fill(null)",
+        "refId": "A",
+        "resultFormat": "time_series"
+      }],
+      "title": "Monolith P95",
+      "type": "stat"
+    },
+
+    {
+      "datasource": "myk6",
+      "description": "Monolith: total failed requests — watch this spike as connection pool exhausts",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 10 },
+            { "color": "red", "value": 100 }
+          ]}
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 5, "x": 19, "y": 1 },
+      "id": 5,
+      "options": {
+        "reduceOptions": { "calcs": ["sum"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "targets": [{
+        "rawQuery": true,
+        "query": "SELECT sum(\"value\") FROM \"http_req_failed\" WHERE \"arch\" = 'monolith' AND $timeFilter GROUP BY time($__interval) fill(0)",
+        "refId": "A",
+        "resultFormat": "time_series"
+      }],
+      "title": "Monolith Errors",
+      "type": "stat"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "title": "── Response Time: Microservices (left)  |  Monolith (right) ──",
+      "type": "row"
+    },
+
+    {
+      "datasource": "myk6",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": false }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 6 },
+      "id": 10,
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "last"] }
+      },
+      "targets": [
+        {
+          "alias": "P50",
+          "rawQuery": true,
+          "query": "SELECT percentile(\"value\", 50) FROM \"http_req_duration\" WHERE \"arch\" = 'microservices' AND $timeFilter GROUP BY time($__interval) fill(null)",
+          "refId": "A",
+          "resultFormat": "time_series"
+        },
+        {
+          "alias": "P95",
+          "rawQuery": true,
+          "query": "SELECT percentile(\"value\", 95) FROM \"http_req_duration\" WHERE \"arch\" = 'microservices' AND $timeFilter GROUP BY time($__interval) fill(null)",
+          "refId": "B",
+          "resultFormat": "time_series"
+        },
+        {
+          "alias": "P99",
+          "rawQuery": true,
+          "query": "SELECT percentile(\"value\", 99) FROM \"http_req_duration\" WHERE \"arch\" = 'microservices' AND $timeFilter GROUP BY time($__interval) fill(null)",
+          "refId": "C",
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Microservices — Response Time (ms)",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": "myk6",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": false }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "P95" }, "properties": [{ "id": "color", "value": { "fixedColor": "#FA6400", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "P99" }, "properties": [{ "id": "color", "value": { "fixedColor": "#E02F44", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 6 },
+      "id": 11,
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "last"] }
+      },
+      "targets": [
+        {
+          "alias": "P50",
+          "rawQuery": true,
+          "query": "SELECT percentile(\"value\", 50) FROM \"http_req_duration\" WHERE \"arch\" = 'monolith' AND $timeFilter GROUP BY time($__interval) fill(null)",
+          "refId": "A",
+          "resultFormat": "time_series"
+        },
+        {
+          "alias": "P95",
+          "rawQuery": true,
+          "query": "SELECT percentile(\"value\", 95) FROM \"http_req_duration\" WHERE \"arch\" = 'monolith' AND $timeFilter GROUP BY time($__interval) fill(null)",
+          "refId": "B",
+          "resultFormat": "time_series"
+        },
+        {
+          "alias": "P99",
+          "rawQuery": true,
+          "query": "SELECT percentile(\"value\", 99) FROM \"http_req_duration\" WHERE \"arch\" = 'monolith' AND $timeFilter GROUP BY time($__interval) fill(null)",
+          "refId": "C",
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Monolith — Response Time (ms)",
+      "type": "timeseries"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "id": 102,
+      "title": "── Error Rate & Throughput ────────────────────────────────────",
+      "type": "row"
+    },
+
+    {
+      "datasource": "myk6",
+      "description": "Failed request count per interval. http_req_failed=1 means the request was marked failed by k6.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 15, "spanNulls": false }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Monolith" }, "properties": [{ "id": "color", "value": { "fixedColor": "#E02F44", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Microservices" }, "properties": [{ "id": "color", "value": { "fixedColor": "#37872D", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 16 },
+      "id": 20,
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] }
+      },
+      "targets": [
+        {
+          "alias": "Microservices",
+          "rawQuery": true,
+          "query": "SELECT sum(\"value\") FROM \"http_req_failed\" WHERE \"arch\" = 'microservices' AND $timeFilter GROUP BY time($__interval) fill(0)",
+          "refId": "A",
+          "resultFormat": "time_series"
+        },
+        {
+          "alias": "Monolith",
+          "rawQuery": true,
+          "query": "SELECT sum(\"value\") FROM \"http_req_failed\" WHERE \"arch\" = 'monolith' AND $timeFilter GROUP BY time($__interval) fill(0)",
+          "refId": "B",
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Failed Requests per Interval",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": "myk6",
+      "description": "Total requests sent per interval by each architecture run",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": false }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Monolith" }, "properties": [{ "id": "color", "value": { "fixedColor": "#FF9830", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Microservices" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3274D9", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 16 },
+      "id": 21,
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] }
+      },
+      "targets": [
+        {
+          "alias": "Microservices",
+          "rawQuery": true,
+          "query": "SELECT sum(\"value\") FROM \"http_reqs\" WHERE \"arch\" = 'microservices' AND $timeFilter GROUP BY time($__interval) fill(0)",
+          "refId": "A",
+          "resultFormat": "time_series"
+        },
+        {
+          "alias": "Monolith",
+          "rawQuery": true,
+          "query": "SELECT sum(\"value\") FROM \"http_reqs\" WHERE \"arch\" = 'monolith' AND $timeFilter GROUP BY time($__interval) fill(0)",
+          "refId": "B",
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Throughput — Requests per Interval",
+      "type": "timeseries"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 25 },
+      "id": 103,
+      "title": "── Per-Endpoint Breakdown ─────────────────────────────────────",
+      "type": "row"
+    },
+
+    {
+      "datasource": "myk6",
+      "description": "P95 latency and request count per endpoint per architecture. Single query grouped by both 'name' (route tag) and 'arch' tag.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "displayMode": "color-background-solid" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 500 },
+            { "color": "red", "value": 1000 }
+          ]},
+          "unit": "ms"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "arch" },
+            "properties": [
+              { "id": "custom.displayMode", "value": "auto" },
+              { "id": "unit", "value": "string" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "name" },
+            "properties": [
+              { "id": "custom.displayMode", "value": "auto" },
+              { "id": "unit", "value": "string" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "count" },
+            "properties": [
+              { "id": "custom.displayMode", "value": "auto" },
+              { "id": "unit", "value": "short" }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 26 },
+      "id": 30,
+      "options": {
+        "sortBy": [{ "displayName": "percentile", "desc": true }],
+        "showHeader": true,
+        "footer": { "show": false }
+      },
+      "targets": [{
+        "rawQuery": true,
+        "query": "SELECT percentile(\"value\", 95), mean(\"value\"), count(\"value\") FROM \"http_req_duration\" WHERE $timeFilter GROUP BY \"name\", \"arch\" fill(null)",
+        "refId": "A",
+        "resultFormat": "table"
+      }],
+      "title": "Endpoint Breakdown — P95 / Mean / Count by Route & Architecture",
+      "type": "table",
+      "transformations": [
+        { "id": "organize", "options": {
+          "renameByName": {
+            "percentile": "P95 (ms)",
+            "mean": "Mean (ms)",
+            "count": "Request Count",
+            "name": "Endpoint",
+            "arch": "Architecture"
+          }
+        }}
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "id": 104,
+      "title": "── RabbitMQ Async Health (Microservices only — via Telegraf) ──",
+      "type": "row"
+    },
+
+    {
+      "datasource": "myk6",
+      "description": "COMMENT_CREATED queue depth over time. A growing queue here means the consumer worker is falling behind — but the HTTP endpoint stays fast (202). High depth is acceptable as long as DLQ stays at 0.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "fixedColor": "#3274D9", "mode": "fixed" },
+          "custom": { "lineWidth": 2, "fillOpacity": 20, "spanNulls": false },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 500 },
+            { "color": "red", "value": 2000 }
+          ]}
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 37 },
+      "id": 40,
+      "options": {
+        "tooltip": { "mode": "single", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["max", "last"] }
+      },
+      "targets": [{
+        "alias": "Queue Depth",
+        "rawQuery": true,
+        "query": "SELECT last(\"messages\") FROM \"rabbitmq_queue\" WHERE \"name\" = 'COMMENT_CREATED' AND $timeFilter GROUP BY time($__interval) fill(null)",
+        "refId": "A",
+        "resultFormat": "time_series"
+      }],
+      "title": "COMMENT_CREATED Queue Depth",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": "myk6",
+      "description": "Dead letter queue depth. This MUST stay at 0. Any value here means a comment worker crashed and the message was rejected after retry — a processing failure.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "fixedColor": "#E02F44", "mode": "fixed" },
+          "custom": { "lineWidth": 2, "fillOpacity": 20, "spanNulls": false },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "red", "value": 1 }
+          ]}
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 37 },
+      "id": 41,
+      "options": {
+        "tooltip": { "mode": "single", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["max", "last"] }
+      },
+      "targets": [{
+        "alias": "DLQ Messages",
+        "rawQuery": true,
+        "query": "SELECT last(\"messages\") FROM \"rabbitmq_queue\" WHERE \"name\" = 'COMMENT_DLQ' AND $timeFilter GROUP BY time($__interval) fill(null)",
+        "refId": "A",
+        "resultFormat": "time_series"
+      }],
+      "title": "COMMENT_DLQ Dead Letters (must stay 0)",
+      "type": "timeseries"
+    }
+
+  ]
+}

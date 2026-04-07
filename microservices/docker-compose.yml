@@ -120,6 +120,15 @@ services:
       - ./client:/app
       - /app/node_modules
 
+  telegraf:
+    image: telegraf:latest
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    depends_on:
+      - rabbitmq
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   postgres_data:
   mongodb_data:

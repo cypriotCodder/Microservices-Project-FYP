@@ -2,17 +2,19 @@ import express from 'express';
 import dotenv from 'dotenv';
 import { Product } from './models/product';
 import { Review } from './models/review';
+import { Comment } from './models/comment';
 import { seedProducts } from "./controllers/productController";
 import connectDB from './config/db';
 import { connectRedis, redisClient } from './config/redis';
-import { connectToRabbitMQ, consumeOrderBoughtEvents, consumeOrderDeletedEvents } from "./utils/messageBroker";
+import { connectToRabbitMQ, consumeOrderBoughtEvents, consumeOrderDeletedEvents, consumeCommentCreatedEvents, publishCommentCreatedEvent } from "./utils/messageBroker";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3002;
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.get('/health', (req, res) => {
     res.json({ status: 'Product Service is running' });
@@ -84,12 +86,44 @@ app.post('/:productId/reviews', async (req, res) => {
     }
 });
 
+app.post('/:productId/comments', async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const commentData = { ...req.body, productId };
+        
+        // Asynchronous publish, immediately return
+        await publishCommentCreatedEvent(commentData);
+        res.status(202).json({ message: 'Comment creation accepted and placed in queue' });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to queue comment', error });
+    }
+});
+
 app.get('/:productId/reviews', async (req, res) => {
     try {
         const reviews = await Review.find({ productId: req.params.productId }).sort({ createdAt: -1 });
         res.json(reviews);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching reviews', error });
+    }
+});
+
+app.get('/:productId/comments', async (req, res) => {
+    try {
+        const { productId } = req.params;
+
+        // Check Redis list first (populated asynchronously by the COMMENT_CREATED consumer)
+        const redisKey = `product:${productId}:comments:recent`;
+        const cached = await redisClient.lRange(redisKey, 0, 49);
+        if (cached.length > 0) {
+            return res.json(cached.map(c => JSON.parse(c)));
+        }
+
+        // Cache miss — fall back to MongoDB
+        const comments = await Comment.find({ productId }).sort({ createdAt: -1 }).limit(50);
+        res.json(comments);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching comments', error });
     }
 });
 
@@ -106,6 +140,7 @@ const startServer = async () => {
     // 2. Start listening to queues
     await consumeOrderBoughtEvents();
     await consumeOrderDeletedEvents();
+    await consumeCommentCreatedEvents();
 
     app.listen(PORT, () => {
         console.log(`Product Service running on port ${PORT}`);

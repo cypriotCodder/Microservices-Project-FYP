@@ -1,8 +1,17 @@
 import { Request, Response } from "express";
 import { prisma } from "../config/prisma";
+import { redisClient } from "../config/redis";
 
 export const seedProducts = async (req: Request, res: Response) => {
     try {
+        // 0. Flush all product-related Redis keys BEFORE touching Postgres.
+        //    Without this, the frontend would receive cached products with stale IDs
+        //    after the seed deletes and re-inserts with new auto-increment IDs,
+        //    causing FK constraint failures when users try to post comments.
+        await redisClient.del('products:all');
+        const individualKeys = await redisClient.keys('product:*');
+        if (individualKeys.length > 0) await redisClient.del(individualKeys);
+
         // 1. Clear existing data (clean slate for the test)
         await prisma.review.deleteMany({});
         await prisma.orderItem.deleteMany({});

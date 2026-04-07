@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { fetchFromAPI } from '../api/client';
-import { Sparkles, PackageCheck, AlertCircle } from 'lucide-react';
+import { Sparkles, PackageCheck, AlertCircle, MessageSquare, Send } from 'lucide-react';
 import '../styles/main.css';
 
 interface Product {
@@ -23,14 +23,26 @@ interface Review {
     createdAt: string;
 }
 
+interface Comment {
+    id?: number;
+    _id?: string;
+    userId: string;
+    content: string;
+    createdAt: string;
+}
+
 export default function ProductDetails() {
     const { id } = useParams<{ id: string }>();
     const [product, setProduct] = useState<Product | null>(null);
     const [reviews, setReviews] = useState<Review[]>([]);
+    const [comments, setComments] = useState<Comment[]>([]);
     const [loading, setLoading] = useState(true);
     const [summary, setSummary] = useState<string | null>(null);
     const [isSummarizing, setIsSummarizing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [commentText, setCommentText] = useState('');
+    const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+    const [commentFeedback, setCommentFeedback] = useState<{ type: 'saved' | 'error'; msg: string } | null>(null);
 
     useEffect(() => {
         const fetchDetails = async () => {
@@ -39,6 +51,15 @@ export default function ProductDetails() {
                 setProduct(prodData);
                 const reviewData = await fetchFromAPI(`/products/${id}/reviews`);
                 setReviews(Array.isArray(reviewData) ? reviewData : []);
+
+                // Comments fetch is isolated — a missing DB table or unbuilt container
+                // must not crash the product/review section above it.
+                try {
+                    const commentData = await fetchFromAPI(`/products/${id}/comments`);
+                    setComments(Array.isArray(commentData) ? commentData : []);
+                } catch {
+                    // Silently degrade — comments section shows empty until table exists
+                }
 
                 // Track product view/click for recommendations
                 const userStr = localStorage.getItem('user');
@@ -74,6 +95,32 @@ export default function ProductDetails() {
             alert('Failed to summarize text: ' + err.message);
         } finally {
             setIsSummarizing(false);
+        }
+    };
+
+    const handleComment = async () => {
+        if (!commentText.trim() || !product) return;
+        setIsSubmittingComment(true);
+        setCommentFeedback(null);
+        try {
+            const userStr = localStorage.getItem('user');
+            const currentUser = userStr ? JSON.parse(userStr) : null;
+            const userId = currentUser?.userId || '1';
+
+            await fetchFromAPI(`/products/${id}/comments`, {
+                method: 'POST',
+                body: JSON.stringify({ userId, content: commentText.trim() })
+            });
+
+            // Monolith writes synchronously (201) — add to local state immediately
+            const now = new Date().toISOString();
+            setComments(prev => [{ userId, content: commentText.trim(), createdAt: now }, ...prev]);
+            setCommentFeedback({ type: 'saved', msg: '✓ Comment saved.' });
+            setCommentText('');
+        } catch (e: any) {
+            setCommentFeedback({ type: 'error', msg: 'Failed to post comment: ' + e.message });
+        } finally {
+            setIsSubmittingComment(false);
         }
     };
 
@@ -162,7 +209,7 @@ export default function ProductDetails() {
                         </button>
                     </div>
 
-                    {/* Right Column: AI Summary & Reviews */}
+                    {/* Right Column: AI Summary, Reviews & Comments */}
                     <div style={{ flex: '1 1 400px' }}>
                         <div style={{
                             background: 'var(--card-bg)',
@@ -219,6 +266,59 @@ export default function ProductDetails() {
                                 </div>
                             ) : (
                                 <p style={{ color: 'var(--text-secondary)' }}>No reviews yet. Be the first to leave a review!</p>
+                            )}
+                        </div>
+
+                        {/* Comments Section */}
+                        <div style={{ marginTop: '2rem' }}>
+                            <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <MessageSquare size={18} /> Comments ({comments.length})
+                            </h3>
+
+                            {/* Submit form */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem', background: 'var(--card-bg)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                                <textarea
+                                    id="comment-input"
+                                    value={commentText}
+                                    onChange={e => setCommentText(e.target.value)}
+                                    placeholder="Leave a comment..."
+                                    rows={3}
+                                    style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-color)', resize: 'vertical', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                                />
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    {commentFeedback && (
+                                        <span style={{ fontSize: '0.85rem', color: commentFeedback.type === 'error' ? 'var(--error)' : '#37872D', fontStyle: 'italic' }}>
+                                            {commentFeedback.msg}
+                                        </span>
+                                    )}
+                                    <button
+                                        id="submit-comment-btn"
+                                        className="btn"
+                                        onClick={handleComment}
+                                        disabled={isSubmittingComment || !commentText.trim()}
+                                        style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1.2rem', fontSize: '0.9rem', opacity: (!commentText.trim() || isSubmittingComment) ? 0.6 : 1 }}
+                                    >
+                                        <Send size={14} />
+                                        {isSubmittingComment ? 'Saving...' : 'Post Comment'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Comment list */}
+                            {comments.length > 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                    {comments.map((c, i) => (
+                                        <div key={c.id || c._id || i} style={{ padding: '0.85rem 1rem', border: '1px solid var(--border-color)', borderRadius: '8px', background: 'rgba(255,255,255,0.02)' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                                                <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--accent-color)' }}>User {c.userId}</span>
+                                                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{new Date(c.createdAt).toLocaleString()}</span>
+                                            </div>
+                                            <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: '1.4', fontSize: '0.92rem' }}>{c.content}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>No comments yet. Be the first!</p>
                             )}
                         </div>
                     </div>

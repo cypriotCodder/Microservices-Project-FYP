@@ -32,7 +32,7 @@ const seedProducts = (req, res) => __awaiter(void 0, void 0, void 0, function* (
                 description: "Latest smartphone",
                 price: 999,
                 stock: 5, // LOW stock - good for testing 'race conditions'
-                image: "https://images.unsplash.com/photo-1696446701796-da61225697cc?auto=format&fit=crop&q=80&w=1000",
+                image: "",
                 category: "Electronics"
             },
             {
@@ -46,6 +46,7 @@ const seedProducts = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             }
         ];
         // 3. Insert into DB
+        console.log("Attempting to seed with:", JSON.stringify(sampleProducts, null, 2));
         yield product_1.Product.insertMany(sampleProducts);
         res.status(201).json({
             message: "Database seeded successfully!",

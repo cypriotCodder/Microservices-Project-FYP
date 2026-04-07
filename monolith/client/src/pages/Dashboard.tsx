@@ -5,7 +5,7 @@ import { fetchFromAPI } from '../api/client';
 import '../styles/main.css';
 
 interface Product {
-    _id: string;
+    id: number;        // Postgres auto-increment integer
     name: string;
     price: number;
     stock: number;
@@ -43,14 +43,14 @@ export function Dashboard() {
                 const recProductIds = recData.recommendations.map(r => r.productId);
 
                 // Filter products that exist in recommendations
-                let recProducts = allProducts.filter(p => recProductIds.includes(p._id));
+                let recProducts = allProducts.filter(p => recProductIds.includes(String(p.id)));
 
                 if (recProducts.length === 0 && allProducts.length >= 3) {
                     // Fallback to top 3 generic products if the user has a fresh account or dummy IDs failed
                     recProducts = allProducts.slice(0, 3);
                 } else {
                     // Sort them by the order returned by the recommendation service (highest score first)
-                    recProducts.sort((a, b) => recProductIds.indexOf(a._id) - recProductIds.indexOf(b._id));
+                    recProducts.sort((a, b) => recProductIds.indexOf(String(a.id)) - recProductIds.indexOf(String(b.id)));
                 }
 
                 setRecommendedProducts(recProducts);
@@ -75,13 +75,13 @@ export function Dashboard() {
                 body: JSON.stringify({
                     userId: currentUserId,
                     totalAmount: product.price,
-                    products: [{ productId: product._id, quantity: 1 }]
+                    products: [{ productId: product.id, quantity: 1 }]
                 })
             });
             // Update the local state to reflect the stock decrease immediately
             setProducts(prevProducts =>
                 prevProducts.map(p =>
-                    p._id === product._id ? { ...p, stock: p.stock - 1 } : p
+                    p.id === product.id ? { ...p, stock: p.stock - 1 } : p
                 )
             );
             alert('Order placed successfully!');
@@ -119,8 +119,8 @@ export function Dashboard() {
     }, {} as Record<string, Product[]>);
 
     const CompactProductCard = ({ product }: { product: Product }) => (
-        <div key={`compact-${product._id}`} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s' }}>
-            <Link to={`/product/${product._id}`} style={{ textDecoration: 'none' }}>
+        <div key={`compact-${product.id}`} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s' }}>
+            <Link to={`/product/${product.id}`} style={{ textDecoration: 'none' }}>
                 <div style={{
                     width: '60px',
                     height: '60px',
@@ -139,7 +139,7 @@ export function Dashboard() {
                 </div>
             </Link>
             <div style={{ flex: 1 }}>
-                <Link to={`/product/${product._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <Link to={`/product/${product.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                     <h3 style={{ fontSize: '0.9rem', margin: '0 0 0.25rem 0', fontWeight: 600, color: 'var(--text-color)' }}>{product.name}</h3>
                 </Link>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
@@ -158,8 +158,8 @@ export function Dashboard() {
     );
 
     const ProductCard = ({ product }: { product: Product }) => (
-        <div key={product._id} className="card">
-            <Link to={`/product/${product._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+        <div key={product.id} className="card">
+            <Link to={`/product/${product.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                 <div style={{
                     height: '150px',
                     background: 'linear-gradient(45deg, #333, #444)',
@@ -209,7 +209,7 @@ export function Dashboard() {
                                     Recommended for You
                                 </h2>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1rem' }}>
-                                    {recommendedProducts.map(p => <CompactProductCard key={`rec-${p._id}`} product={p} />)}
+                                    {recommendedProducts.map(p => <CompactProductCard key={`rec-${p.id}`} product={p} />)}
                                 </div>
                             </div>
                         )}
@@ -300,7 +300,7 @@ export function Dashboard() {
                                     </h2>
                                 )}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '2rem' }}>
-                                    {categoryProducts.map((product) => <ProductCard key={product._id} product={product} />)}
+                                    {categoryProducts.map((product) => <ProductCard key={product.id} product={product} />)}
                                 </div>
                             </div>
                         ))}

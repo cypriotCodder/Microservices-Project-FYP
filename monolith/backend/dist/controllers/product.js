@@ -10,47 +10,48 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.seedProducts = void 0;
-const products_1 = require("../models/products");
+const prisma_1 = require("../config/prisma");
 const seedProducts = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        // 1. Clear existing data (Clean slate for the test)
-        yield products_1.Product.deleteMany({});
-        // 2. Define dummy data
+        // 1. Clear existing data (clean slate for the test)
+        yield prisma_1.prisma.review.deleteMany({});
+        yield prisma_1.prisma.orderItem.deleteMany({});
+        yield prisma_1.prisma.order.deleteMany({});
+        yield prisma_1.prisma.product.deleteMany({});
+        // 2. Define sample products
         const sampleProducts = [
             {
-                _id: "65bf73e93409110012345678", // Hardcoded ID for easy testing in Postman
                 name: "MacBook Pro M3",
                 description: "High performance laptop",
                 price: 1999,
-                stock: 100, // PLENTY of stock
+                stock: 100,
                 image: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&q=80&w=1000",
                 category: "Electronics"
             },
             {
-                _id: "65bf73e93409110087654321",
                 name: "iPhone 15",
                 description: "Latest smartphone",
                 price: 999,
-                stock: 5, // LOW stock - good for testing 'race conditions'
-                image: "",
+                stock: 5,
+                image: "https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&q=80&w=1000",
                 category: "Electronics"
             },
             {
-                _id: "65bf73e93409110000000000",
                 name: "Sony Headphones",
                 description: "Noise cancelling",
                 price: 299,
-                stock: 0, // NO stock - should fail immediately
+                stock: 0,
                 image: "https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?auto=format&fit=crop&q=80&w=1000",
                 category: "Electronics"
             }
         ];
-        // 3. Insert into DB
-        console.log("Attempting to seed with:", JSON.stringify(sampleProducts, null, 2));
-        yield products_1.Product.insertMany(sampleProducts);
+        // 3. Insert into PostgreSQL via Prisma
+        yield prisma_1.prisma.product.createMany({ data: sampleProducts });
+        // Fetch back so we can return them with their assigned IDs
+        const insertedProducts = yield prisma_1.prisma.product.findMany({ orderBy: { id: 'asc' } });
         res.status(201).json({
             message: "Database seeded successfully!",
-            products: sampleProducts
+            products: insertedProducts
         });
     }
     catch (error) {
