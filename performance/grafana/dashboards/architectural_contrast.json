@@ -12,7 +12,7 @@
   "title": "Architectural Contrast Benchmark",
   "uid": "arch_contrast_v3",
   "version": 1,
-  "time": { "from": "now-30m", "to": "now" },
+  "time": { "from": "now-10m", "to": "now" },
   "timepicker": {},
   "panels": [
 

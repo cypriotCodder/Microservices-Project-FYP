@@ -28,8 +28,12 @@ services:
       - testing
     volumes:
       - ./loadtest.js:/scripts/loadtest.js:ro
+      - ./results:/results
     environment:
       - K6_OUT=influxdb=http://influxdb:8086/k6
-      # Default target, can be overridden by user when executing the profile
       - TARGET_URL=${TARGET_URL:-http://host.docker.internal:8080}
-    command: run /scripts/loadtest.js
+      - ARCH=${ARCH:-unknown}
+    # --tag arch=... stamps EVERY k6 metric in InfluxDB with the arch label,
+    # not just per-request HTTP metrics. This is what makes GROUP BY "arch"
+    # work for vus, http_reqs, error-rate panels in Grafana.
+    command: run --tag arch=${ARCH:-unknown} /scripts/loadtest.js

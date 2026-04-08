@@ -25,6 +25,20 @@ router.get('/', async (req, res) => {
     }
 });
 
+// Lightweight read probe — bypasses Redis, hits Postgres directly.
+// Used by k6 PingDB iterations to measure raw DB latency and make
+// connection pool exhaustion visible as a latency spike at ~200 VUs.
+// Must be declared BEFORE /:id to avoid Express param conflict.
+router.get('/ping', async (req, res) => {
+    const start = Date.now();
+    try {
+        await prisma.product.findFirst({});
+        res.json({ ok: true, dbLatency: Date.now() - start });
+    } catch (e) {
+        res.status(500).json({ ok: false, error: String(e) });
+    }
+});
+
 // GET single product by ID
 router.get('/:id', async (req, res) => {
     try {

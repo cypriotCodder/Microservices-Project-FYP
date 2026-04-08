@@ -8,19 +8,34 @@ import { randomString, randomIntBetween } from 'https://jslib.k6.io/k6-utils/1.2
 // tag on every metric even if the per-request tags below are somehow skipped.
 // Having it in both places is intentional: the per-request tag makes the Grafana
 // GROUP BY "name", "arch" endpoint table work correctly.
-const ARCH          = __ENV.ARCH          || 'unknown';
-const SAMPLE_USER_ID = '1';
+const ARCH           = __ENV.ARCH || 'unknown';
+// 50 test accounts seeded by prisma/seedUsers.ts / microservices/seedUsers.ts
+// Each VU gets its own account so bcrypt hits 50 separate rows under load.
+const VU_USERNAME    = () => `user${(__VU - 1) % 50}@test.com`;
+const VU_PASSWORD    = 'password123';
 
 export const options = {
     stages: [
         { duration: '30s', target: 50   }, // warm up
-        { duration: '1m',  target: 200  }, // normal load
-        { duration: '1m',  target: 500  }, // moderate stress
-        { duration: '1m',  target: 1000 }, // heavy stress
+        { duration: '60s', target: 200  }, // normal load
+        { duration: '60s', target: 500  }, // moderate stress
+        { duration: '60s', target: 1000 }, // heavy stress
         { duration: '30s', target: 0    }, // cool down
     ],
-    // Thresholds omitted deliberately: let the Monolith degrade without aborting.
-    // Failure thresholds are observed in Grafana via arch tag segmentation.
+    thresholds: {
+        // Microservices must stay under 1 s at p95 — abort if not
+        'http_req_duration{arch:microservices}': ['p(95)<1000'],
+        // Monolith: record it but NEVER abort — let it die visibly in Grafana
+        'http_req_duration{arch:monolith}': [
+            { threshold: 'p(95)<30000', abortOnFail: false },
+        ],
+    },
+    // Raise the per-request timeout so actual latency is measured rather than
+    // having requests silently fail as "connection reset" when the monolith
+    // slows down under load — default is 60s which masks real degradation.
+    http: {
+        timeout: '120s',
+    },
 };
 
 // ─── setup() runs ONCE before VUs start ───────────────────────────────────────
@@ -62,87 +77,138 @@ export function setup() {
     return { TARGET, ids, arch: ARCH };
 }
 
+// ─── VU-level session state ────────────────────────────────────────────────────
+// These variables are module-level so they persist across iterations WITHIN the
+// same VU. Each VU logs in once (first iteration), then reuses the token.
+let vToken   = null;  // JWT from login
+let vUserId  = null;  // userId returned by login
+
 // ─── default() receives setup() data as first argument ────────────────────────
 export default function (data) {
     const { TARGET, ids, arch } = data;
     const randomProduct = ids[randomIntBetween(0, ids.length - 1)];
-    const roll = Math.random();
-    let res;
 
-    if (roll < 0.25) {
-        // Fetch Catalog (25%)
-        res = http.get(`${TARGET}/products`, {
-            tags: { name: 'FetchCatalog', arch }
+    // ── Per-VU login: runs ONCE on the first iteration ────────────────────────
+    // bcrypt.compare() on the server makes this genuinely CPU-intensive,
+    // which stresses the monolith event loop differently from read requests.
+    if (!vToken) {
+        const loginPayload = JSON.stringify({ username: VU_USERNAME(), password: VU_PASSWORD });
+        const loginRes = http.post(`${TARGET}/auth/login`, loginPayload, {
+            headers: { 'Content-Type': 'application/json' },
+            tags: { name: 'SessionLogin', arch }
         });
-        check(res, { 'status is 200': (r) => r.status === 200 });
+
+        check(loginRes, { 'session login ok': r => r.status === 200 });
+
+        if (loginRes.status === 200) {
+            const body = JSON.parse(loginRes.body);
+            vToken  = body.token;
+            vUserId = String(body.userId);
+        } else {
+            // Login failed — mark so we skip this VU rather than polluting data
+            vToken  = '__failed__';
+            vUserId = '1';
+        }
+
+        // First iteration = login only. Return early so the next iteration
+        // begins immediately with an authenticated session.
+        sleep(0.1);
+        return;
+    }
+
+    // If login failed for this VU, park it rather than sending unauth requests
+    if (vToken === '__failed__') {
+        sleep(1);
+        return;
+    }
+
+    // ── All requests carry the session token ──────────────────────────────────
+    const authHeaders = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${vToken}`
+    };
+
+    // ── FetchCatalog — fires EVERY iteration ─────────────────────────────────
+    // Deterministic cache-read load; shows Redis hit rate collapsing under pressure.
+    let res = http.get(`${TARGET}/products`, {
+        headers: authHeaders,
+        tags: { name: 'FetchCatalog', arch }
+    });
+    check(res, { 'catalog 200': r => r.status === 200 });
+
+    // ── PostComment — fires EVERY iteration ──────────────────────────────────
+    // Deterministic write load; architectural difference is most visible here
+    // (Postgres blocking vs RabbitMQ async). Makes failure curve reproducible.
+    const commentPayload = JSON.stringify({
+        userId: vUserId,
+        content: `k6 stress comment VU=${__VU} iter=${__ITER}`
+    });
+    res = http.post(
+        `${TARGET}/products/${randomProduct}/comments`,
+        commentPayload,
+        { headers: authHeaders, tags: { name: 'PostComment', arch } }
+    );
+    check(res, { 'comment accepted (201|202)': r => r.status === 201 || r.status === 202 });
+
+    // ── One supplementary request, chosen probabilistically ──────────────────
+    const roll = Math.random();
+
+    if (roll < 0.20) {
+        // PingDB (20%) — raw DB latency probe, bypasses Redis
+        res = http.get(`${TARGET}/products/ping`, {
+            headers: authHeaders,
+            tags: { name: 'PingDB', arch }
+        });
+        check(res, { 'ping ok': r => r.status === 200 });
 
     } else if (roll < 0.40) {
-        // Product Details (15%)
+        // FetchProductDetails (20%)
         res = http.get(`${TARGET}/products/${randomProduct}`, {
+            headers: authHeaders,
             tags: { name: 'FetchProductDetails', arch }
         });
-        check(res, { 'status is 200': (r) => r.status === 200 });
+        check(res, { 'status is 200': r => r.status === 200 });
 
     } else if (roll < 0.55) {
-        // Post Comment — write-heavy stress target (15%)
-        const payload = JSON.stringify({
-            userId: SAMPLE_USER_ID,
-            content: `k6 stress comment VU=${__VU} iter=${__ITER}`
+        // FetchOrders (15%) — DB join with auth userId
+        res = http.get(`${TARGET}/orders/${vUserId}`, {
+            headers: authHeaders,
+            tags: { name: 'FetchOrders', arch }
         });
-        res = http.post(
-            `${TARGET}/products/${randomProduct}/comments`,
-            payload,
-            { headers: { 'Content-Type': 'application/json' }, tags: { name: 'PostComment', arch } }
-        );
-        check(res, { 'comment accepted (201|202)': (r) => r.status === 201 || r.status === 202 });
+        check(res, { 'status is 200': r => r.status === 200 });
 
-    } else if (roll < 0.60) {
-        // Register new user (5%)
-        const payload = JSON.stringify({ username: `k6_${randomString(10)}`, password: 'password123' });
-        res = http.post(`${TARGET}/auth/register`, payload, {
+    } else if (roll < 0.65) {
+        // AuthRegister (10%) — bcrypt hash on server (new user signups)
+        const regPayload = JSON.stringify({ username: `k6_${randomString(10)}`, password: 'password123' });
+        res = http.post(`${TARGET}/auth/register`, regPayload, {
             headers: { 'Content-Type': 'application/json' },
             tags: { name: 'AuthRegister', arch }
         });
-        check(res, { 'status is 201': (r) => r.status === 201 });
-
-    } else if (roll < 0.70) {
-        // Admin login — bcrypt CPU stress (10%)
-        const payload = JSON.stringify({ username: 'admin@fyp.com', password: 'admin' });
-        res = http.post(`${TARGET}/auth/login`, payload, {
-            headers: { 'Content-Type': 'application/json' },
-            tags: { name: 'AuthLogin', arch }
-        });
-        check(res, { 'status is 200': (r) => r.status === 200 });
+        check(res, { 'status is 201': r => r.status === 201 });
 
     } else if (roll < 0.80) {
-        // LLM summarize (10%)
-        const payload = JSON.stringify({ text: 'A standard k6 generated e-commerce item.' });
-        res = http.post(`${TARGET}/llm/summarize`, payload, {
-            headers: { 'Content-Type': 'application/json' },
+        // LLMSummarize (15%) — external Groq API call; latency wildcard
+        const llmPayload = JSON.stringify({ text: 'A standard k6 generated e-commerce product description for stress testing.' });
+        res = http.post(`${TARGET}/llm/summarize`, llmPayload, {
+            headers: authHeaders,
             tags: { name: 'LLMSummarize', arch }
         });
-        check(res, { 'status is 200': (r) => r.status === 200 });
-
-    } else if (roll < 0.90) {
-        // Fetch Orders (10%)
-        res = http.get(`${TARGET}/orders`, {
-            tags: { name: 'FetchOrders', arch }
-        });
-        check(res, { 'status is 200': (r) => r.status === 200 });
+        check(res, { 'status is 200': r => r.status === 200 });
 
     } else {
-        // Checkout (10%)
-        const payload = JSON.stringify({
-            userId: SAMPLE_USER_ID,
+        // CreateOrder (20%) — write + stock decrement + cache invalidation
+        const orderPayload = JSON.stringify({
+            userId: vUserId,
             totalAmount: 99.99,
             products: [{ productId: randomProduct, quantity: 1 }]
         });
-        res = http.post(`${TARGET}/orders`, payload, {
-            headers: { 'Content-Type': 'application/json' },
+        res = http.post(`${TARGET}/orders`, orderPayload, {
+            headers: authHeaders,
             tags: { name: 'CreateOrder', arch }
         });
-        check(res, { 'status is 201': (r) => r.status === 201 });
+        check(res, { 'status is 201': r => r.status === 201 });
     }
 
     sleep(0.1);
 }
+

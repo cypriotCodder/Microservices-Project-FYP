@@ -75,6 +75,26 @@ app.get('/admin/users/count', async (req, res) => {
     }
 });
 
+// POST /seed-users — create 50 k6 test accounts
+// curl -X POST http://localhost:8080/auth/seed-users
+app.post('/seed-users', async (req, res) => {
+    try {
+        const hash = await bcrypt.hash('password123', 10);
+        let created = 0;
+        let skipped = 0;
+        for (let i = 0; i < 50; i++) {
+            const username = `user${i}@test.com`;
+            const existing = await prisma.user.findUnique({ where: { username } });
+            if (existing) { skipped++; continue; }
+            await prisma.user.create({ data: { username, password: hash } });
+            created++;
+        }
+        res.json({ message: `Seeded ${created} users (${skipped} already existed)` });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to seed users', details: String(error) });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Auth Service running on port ${PORT}`);
 });

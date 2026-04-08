@@ -36,6 +36,18 @@ app.get('/', async (req, res) => {
     }
 });
 
+// Lightweight read probe — bypasses Redis, hits MongoDB directly.
+// Must be declared BEFORE /:id to avoid Express param conflict.
+app.get('/ping', async (req, res) => {
+    const start = Date.now();
+    try {
+        await Product.findOne({}).lean();
+        res.json({ ok: true, dbLatency: Date.now() - start });
+    } catch (e) {
+        res.status(500).json({ ok: false, error: String(e) });
+    }
+});
+
 app.get('/:id', async (req, res) => {
     try {
         const cacheKey = `product:${req.params.id}`;

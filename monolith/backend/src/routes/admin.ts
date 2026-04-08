@@ -66,4 +66,25 @@ router.get('/metrics', requireAdmin, async (req, res) => {
     }
 });
 
+// POST /admin/seed-users — create 50 k6 test accounts
+// curl -X POST http://localhost:4000/admin/seed-users
+router.post('/seed-users', async (req, res) => {
+    try {
+        const bcrypt = await import('bcrypt');
+        const hash = await bcrypt.hash('password123', 10); // one hash, reused for all
+        let created = 0;
+        let skipped = 0;
+        for (let i = 0; i < 50; i++) {
+            const username = `user${i}@test.com`;
+            const existing = await prisma.user.findUnique({ where: { username } });
+            if (existing) { skipped++; continue; }
+            await prisma.user.create({ data: { username, password: hash } });
+            created++;
+        }
+        res.json({ message: `Seeded ${created} users (${skipped} already existed)` });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to seed users', details: String(error) });
+    }
+});
+
 export default router;
