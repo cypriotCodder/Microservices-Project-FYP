@@ -16,7 +16,17 @@ router.get('/', async (req, res) => {
             return res.json(JSON.parse(cachedProducts));
         }
 
-        const products = await prisma.product.findMany({ orderBy: { createdAt: 'desc' } });
+        const products = await prisma.product.findMany({
+            select: {
+                id: true,
+                name: true,
+                price: true,
+                stock: true,
+                image: true,
+                category: true
+            },
+            orderBy: { createdAt: 'desc' }
+        });
 
         await redisClient.setEx('products:all', 3600, JSON.stringify(products));
         res.json(products);

@@ -1,78 +1,136 @@
 #!/usr/bin/env bash
-# run-tests.sh — fire both k6 stress tests concurrently.
-# Usage:
-#   ./run-tests.sh              (uses defaults below)
-#   VUS=200 DURATION=2m ./run-tests.sh
+# run-tests.sh — Sequential isolated stress test.
 #
-# Both processes write to InfluxDB simultaneously so Grafana shows both
-# arch series on the same time axis — enabling a true side-by-side comparison.
+# Run 1: Microservices only  → ./results/results-microservices.json
+# Run 2: Monolith only       → ./results/results-monolith.json
+# Comparison summary printed at end.
+#
+# Usage:  ./run-tests.sh
 
-set -e
+# NOTE: no 'set -e' — k6 exits 99 when thresholds are crossed (expected),
+# which would abort the script before the monolith run starts.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 MONOLITH_URL="${MONOLITH_URL:-http://host.docker.internal:4000}"
 MICROSERVICES_URL="${MICROSERVICES_URL:-http://host.docker.internal:8080}"
-VUS="${VUS:-}"          # leave empty to use the options.stages ramp in loadtest.js
-DURATION="${DURATION:-}" # leave empty to use the options.stages duration
 
-# Build optional CLI overrides (only set if user provided them)
-EXTRA_FLAGS=""
-if [ -n "$VUS" ];      then EXTRA_FLAGS="$EXTRA_FLAGS --vus $VUS"; fi
-if [ -n "$DURATION" ]; then EXTRA_FLAGS="$EXTRA_FLAGS --duration $DURATION"; fi
+MONOLITH_DIR="/Users/nedim/Desktop/myRepo/FYP/deneme1/monolith"
+MICROSERVICES_DIR="/Users/nedim/Desktop/myRepo/FYP/deneme1/microservices"
+
+mkdir -p "$SCRIPT_DIR/results"
 
 echo "╔══════════════════════════════════════════════════════════╗"
-echo "║       Architectural Stress Test — Concurrent Run         ║"
+echo "║       Sequential Architectural Stress Test               ║"
 echo "╠══════════════════════════════════════════════════════════╣"
-echo "║  Monolith      → $MONOLITH_URL"
-echo "║  Microservices → $MICROSERVICES_URL"
-echo "║  Grafana       → http://localhost:3000"
+echo "║  Max VUs : 50                                            ║"
+echo "║  Duration: ~3m30s per run                                ║"
+echo "║  Grafana : http://localhost:3000                         ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
-echo "📊 Open Grafana NOW and set time range to: Last 10 minutes"
-echo "   Dashboard: 'Architectural Contrast Benchmark' (auto-refresh 5s)"
-echo ""
-echo "Starting both tests in 3 seconds..."
+
+# ─── RUN 1: MICROSERVICES ──────────────────────────────────────────────────────
+echo "▶  Run 1/2 — MICROSERVICES  (target: $MICROSERVICES_URL)"
+echo "   Starting in 3 seconds..."
 sleep 3
 
-# ── Microservices (fires first — usually healthier start) ──────────────────────
-ARCH=microservices TARGET_URL="$MICROSERVICES_URL" \
-  docker compose run -T --rm \
+docker compose run --no-deps -T --rm \
     -e TARGET_URL="$MICROSERVICES_URL" \
     -e ARCH="microservices" \
     k6 run --tag arch=microservices \
            --summary-export=/results/results-microservices.json \
-           $EXTRA_FLAGS /scripts/loadtest.js \
-  2>&1 | sed 's/^/[microservices] /' &
-MS_PID=$!
+           /scripts/loadtest.js || true
+MS_CODE=$?
 
-# Small stagger so setup() fetches don't race the same endpoint
-sleep 1
+echo ""
+echo "✅ Run 1 complete (exit $MS_CODE). Stopping microservices app layer..."
+(cd "$MICROSERVICES_DIR" && docker compose stop api-gateway product-service order-service auth-service llm-service recommendation-service content-creator 2>&1 | grep -v "^$")
+echo ""
 
-# ── Monolith ───────────────────────────────────────────────────────────────────
-ARCH=monolith TARGET_URL="$MONOLITH_URL" \
-  docker compose run -T --rm \
+# ─── RUN 2: MONOLITH ──────────────────────────────────────────────────────────
+echo "▶  Run 2/2 — MONOLITH  (target: $MONOLITH_URL)"
+echo "   Starting in 3 seconds..."
+sleep 3
+
+docker compose run --no-deps -T --rm \
     -e TARGET_URL="$MONOLITH_URL" \
     -e ARCH="monolith" \
     k6 run --tag arch=monolith \
            --summary-export=/results/results-monolith.json \
-           $EXTRA_FLAGS /scripts/loadtest.js \
-  2>&1 | sed 's/^/[monolith]      /' &
-M_PID=$!
+           /scripts/loadtest.js || true
+M_CODE=$?
 
 echo ""
-echo "✅ Both k6 processes started. Streaming output..."
-echo "   [microservices] lines = microservices arch"
-echo "   [monolith]      lines = monolith arch"
+echo "✅ Run 2 complete (exit $M_CODE). Stopping monolith app layer..."
+(cd "$MONOLITH_DIR" && docker compose stop monolith-backend 2>&1 | grep -v "^$")
 echo ""
 
-# Wait for both — collect exit codes
-wait $MS_PID; MS_CODE=$?
-wait $M_PID;  M_CODE=$?
+# ─── COMPARISON ───────────────────────────────────────────────────────────────
+echo "══════════════════════════════════════════════════════════"
+echo "  RESULTS COMPARISON"
+echo "══════════════════════════════════════════════════════════"
 
+python3 - <<'PYEOF'
+import json, sys
+
+def load(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"  ⚠️  Could not load {path}: {e}")
+        return None
+
+ms = load("./results/results-microservices.json")
+mo = load("./results/results-monolith.json")
+
+if not ms or not mo:
+    sys.exit(1)
+
+def m(data, key, stat):
+    try:
+        return data["metrics"][key][stat]
+    except:
+        return None
+
+def fmt(v, unit="ms"):
+    if v is None: return "n/a"
+    if unit == "ms": return f"{v*1000:.1f}ms" if v < 1 else f"{v:.2f}s"
+    if unit == "%":  return f"{v*100:.1f}%"
+    return str(v)
+
+rows = [
+    ("http_req_duration",     "avg",   "ms", "Avg latency"),
+    ("http_req_duration",     "p(95)", "ms", "p95 latency"),
+    ("http_req_duration",     "max",   "ms", "Max latency"),
+    ("http_req_failed",       "rate",  "%",  "Error rate"),
+    ("iterations",            "count", None, "Iterations"),
+    ("http_reqs",             "count", None, "HTTP requests"),
+]
+
+print(f"\n  {'Metric':<22} {'Microservices':>16} {'Monolith':>16}")
+print(f"  {'-'*22} {'-'*16} {'-'*16}")
+for key, stat, unit, label in rows:
+    mv = m(ms, key, stat)
+    ov = m(mo, key, stat)
+    if unit == "ms":
+        ms_fmt = fmt(mv, "ms") if mv is not None else "n/a"
+        mo_fmt = fmt(ov, "ms") if ov is not None else "n/a"
+    elif unit == "%":
+        ms_fmt = f"{(mv or 0)*100:.1f}%"
+        mo_fmt = f"{(ov or 0)*100:.1f}%"
+    else:
+        ms_fmt = str(int(mv)) if mv is not None else "n/a"
+        mo_fmt = str(int(ov)) if ov is not None else "n/a"
+    print(f"  {label:<22} {ms_fmt:>16} {mo_fmt:>16}")
+
+print("")
+PYEOF
+
+echo "  📊 Grafana dashboard    : http://localhost:3000"
+echo "  📄 Microservices JSON   : $SCRIPT_DIR/results/results-microservices.json"
+echo "  📄 Monolith JSON        : $SCRIPT_DIR/results/results-monolith.json"
 echo ""
-echo "══════════════════════════════════════════"
-echo "  Test run complete"
-echo "══════════════════════════════════════════"
-echo "  Microservices exit: $MS_CODE  (0=thresholds met, non-zero=p95>1s)"
-echo "  Monolith      exit: $M_CODE   (always 0 — abortOnFail:false)"
-echo ""
-echo "  View results: http://localhost:3000"
+echo "  Restarting stopped services..."
+(cd "$MICROSERVICES_DIR" && docker compose up -d 2>&1 | tail -3)
+(cd "$MONOLITH_DIR" && docker compose up -d monolith-backend 2>&1 | tail -3)
+echo "  Done."

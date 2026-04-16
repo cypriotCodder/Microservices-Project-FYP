@@ -1,9 +1,10 @@
 import express from 'express';
-import { createProxyMiddleware } from 'http-proxy-middleware';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { telemetryMiddleware } from './middleware/telemetry';
 import adminRoutes from './routes/admin';
+import { authMiddleware } from './middleware/authMiddleware';
+import { createCircuitBreakerProxy } from './utils/CircuitBreaker';
 
 dotenv.config();
 
@@ -18,63 +19,52 @@ app.get('/health', (req, res) => {
     res.json({ status: 'API Gateway is running' });
 });
 
-// Proxy routes
-// Note: addresses will be mapped in docker-compose, using service names
-app.use('/auth', createProxyMiddleware({
+// Proxy routes wrapped with Circuit Breakers
+app.use('/auth', createCircuitBreakerProxy({
     target: process.env.AUTH_SERVICE_URL || 'http://localhost:3001',
     changeOrigin: true,
-    pathRewrite: {
-        '^/auth': '', // remove base path
-    },
+    pathRewrite: { '^/auth': '' },
 }));
 
-app.use('/products', createProxyMiddleware({
+// Protected proxies (Auth Middleware allows GETs implicitly)
+app.use('/products', authMiddleware, createCircuitBreakerProxy({
     target: process.env.PRODUCT_SERVICE_URL || 'http://localhost:3002',
     changeOrigin: true,
-    pathRewrite: {
-        '^/products': '',
-    },
+    pathRewrite: { '^/products': '' },
 }));
 
-app.use('/orders', createProxyMiddleware({
+app.use('/orders', authMiddleware, createCircuitBreakerProxy({
     target: process.env.ORDER_SERVICE_URL || 'http://localhost:3003',
     changeOrigin: true,
-    pathRewrite: {
-        '^/orders': '',
-    },
+    pathRewrite: { '^/orders': '' },
 }));
 
-app.use('/recommendations', createProxyMiddleware({
+app.use('/recommendations', authMiddleware, createCircuitBreakerProxy({
     target: process.env.RECOMMENDATION_SERVICE_URL || 'http://localhost:3004',
     changeOrigin: true,
-    pathRewrite: {
-        '^/recommendations': '',
-    },
+    pathRewrite: { '^/recommendations': '' },
 }));
 
-app.use('/llm', createProxyMiddleware({
+app.use('/llm', authMiddleware, createCircuitBreakerProxy({
     target: process.env.LLM_SERVICE_URL || 'http://localhost:3005',
     changeOrigin: true,
-    pathRewrite: {
-        '^/llm': '',
-    },
+    pathRewrite: { '^/llm': '' },
 }));
 
-app.use('/content', createProxyMiddleware({
+app.use('/content', authMiddleware, createCircuitBreakerProxy({
     target: process.env.CONTENT_CREATOR_URL || 'http://content-creator:3008',
     changeOrigin: true,
-    pathRewrite: {
-        '^/content': '',
-    },
+    pathRewrite: { '^/content': '' },
 }));
 
-app.use('/traffic', createProxyMiddleware({
+app.use('/traffic', createCircuitBreakerProxy({
     target: process.env.TRAFFIC_SERVICE_URL || 'http://traffic-service:3007',
-    changeOrigin: true
+    changeOrigin: true,
+    pathRewrite: { '^/traffic': '' }
 }));
 
-app.use('/admin', adminRoutes);
+app.use('/admin', authMiddleware, adminRoutes);
 
 app.listen(PORT, () => {
-    console.log(`API Gateway running on port ${PORT}`);
+    console.log(`Enterprise API Gateway running on port ${PORT}`);
 });

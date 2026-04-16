@@ -15,6 +15,7 @@ services:
       - auth-service
       - product-service
       - order-service
+    restart: on-failure
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -36,11 +37,22 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: examplepassword
     volumes:
       - mongodb_data:/data/db
+    # Cap WiredTiger cache so the Linux OOM killer doesn't terminate MongoDB
+    # under 300-VU load. Default is 50% of RAM which can exhaust all memory.
+    command: mongod --wiredTigerCacheSizeGB 0.5
 
   redis:
     image: redis:7
     ports:
       - "6379:6379"
+    # Cap memory so Redis evicts LRU keys instead of OOM-crashing under load.
+    # 'save ""' disables RDB snapshots — avoids loading a massive persisted
+    # comment dump at startup that consumes memory before any VU connects.
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save ""
 
   postgres:
     image: postgres:15
@@ -69,6 +81,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - MONGO_URI=mongodb://root:examplepassword@mongo:27017/microservices_products?authSource=admin
+    restart: on-failure
 
   order-service:
     build: ./services/order-service
@@ -77,6 +90,7 @@ services:
     env_file: ./services/order-service/.env
     environment:
       - MONGO_URI=mongodb://root:examplepassword@mongo:27017/microservices_orders?authSource=admin
+    restart: on-failure
 
   recommendation-service:
     build: ./services/recommendation-service

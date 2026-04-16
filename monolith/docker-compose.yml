@@ -11,6 +11,7 @@ services:
     depends_on:
       - postgres
       - redis
+    restart: on-failure
 
   monolith-client:
     build: ./client
@@ -26,6 +27,14 @@ services:
     image: redis:7
     ports:
       - "6380:6379"
+    # Cap memory so Redis evicts LRU keys instead of OOM-crashing under load.
+    # 'save ""' disables RDB snapshots — the 129MB persisted comment dump
+    # was loading at startup and blowing the heap before any VU connected.
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save ""
 
   postgres:
     image: postgres:15

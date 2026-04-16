@@ -27,7 +27,7 @@ app.get('/', async (req, res) => {
             return res.json(JSON.parse(cachedProducts));
         }
 
-        const products = await Product.find();
+        const products = await Product.find().select('-description');
         
         await redisClient.setEx('products:all', 3600, JSON.stringify(products));
         res.json(products);

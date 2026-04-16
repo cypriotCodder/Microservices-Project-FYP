@@ -18,4 +18,5 @@ RUN npm run build
 
 EXPOSE 3001
 
+ENV NODE_OPTIONS="--max-old-space-size=512"
 CMD ["npm", "start"]

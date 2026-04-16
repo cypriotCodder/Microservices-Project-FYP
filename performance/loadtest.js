@@ -8,19 +8,20 @@ import { randomString, randomIntBetween } from 'https://jslib.k6.io/k6-utils/1.2
 // tag on every metric even if the per-request tags below are somehow skipped.
 // Having it in both places is intentional: the per-request tag makes the Grafana
 // GROUP BY "name", "arch" endpoint table work correctly.
-const ARCH           = __ENV.ARCH || 'unknown';
+const ARCH = __ENV.ARCH || 'unknown';
 // 50 test accounts seeded by prisma/seedUsers.ts / microservices/seedUsers.ts
 // Each VU gets its own account so bcrypt hits 50 separate rows under load.
-const VU_USERNAME    = () => `user${(__VU - 1) % 50}@test.com`;
-const VU_PASSWORD    = 'password123';
+const VU_USERNAME = () => `user${(__VU - 1) % 50}@test.com`;
+const VU_PASSWORD = 'password123';
 
 export const options = {
     stages: [
-        { duration: '30s', target: 50   }, // warm up
-        { duration: '60s', target: 200  }, // normal load
-        { duration: '60s', target: 500  }, // moderate stress
-        { duration: '60s', target: 1000 }, // heavy stress
-        { duration: '30s', target: 0    }, // cool down
+        { duration: '30s', target: 25  },  // warm up
+        { duration: '60s', target: 50  },  // moderate
+        { duration: '60s', target: 100 },  // stress
+        { duration: '60s', target: 200 },  // connection pool zone
+        { duration: '60s', target: 300 },  // peak (failure curve)
+        { duration: '30s', target: 0   },  // cool down
     ],
     thresholds: {
         // Microservices must stay under 1 s at p95 — abort if not
@@ -30,13 +31,17 @@ export const options = {
             { threshold: 'p(95)<30000', abortOnFail: false },
         ],
     },
-    // Raise the per-request timeout so actual latency is measured rather than
-    // having requests silently fail as "connection reset" when the monolith
-    // slows down under load — default is 60s which masks real degradation.
+    // Raise per-request timeout so actual latency is recorded instead of
+    // silent "connection reset" errors masking the real degradation curve.
     http: {
         timeout: '120s',
     },
+    // Full HTTP debug output — shows headers, timing breakdown, and body
+    // when the monolith starts stalling so you can distinguish slow responses
+    // from outright connection failures in the k6 terminal output.
+    //httpDebug: 'headers',
 };
+
 
 // ─── setup() runs ONCE before VUs start ───────────────────────────────────────
 // Fetches real product IDs from the live target (works for both Postgres integer
@@ -47,16 +52,19 @@ export function setup() {
     // Guard: fail loudly if ARCH was not passed so the operator knows immediately.
     if (ARCH === 'unknown') {
         console.warn('[setup] WARNING: ARCH env var not set. ' +
-                     'Pass -e ARCH=microservices or -e ARCH=monolith. ' +
-                     'Grafana arch-split panels will show "unknown".');
+            'Pass -e ARCH=microservices or -e ARCH=monolith. ' +
+            'Grafana arch-split panels will show "unknown".');
     }
 
-    const res = http.get(`${TARGET}/products`);
+    // Explicit timeout in setup() — without this, a slow monolith response
+    // during the 60s-default fires before the server responds and kills the
+    // entire k6 run with no metrics written at all.
+    const res = http.get(`${TARGET}/products`, { timeout: '120s' });
     if (res.status !== 200) {
         fail(`setup() failed: GET /products returned ${res.status}. ` +
-             `Seed the database first:\n` +
-             `  Monolith:      curl -X POST ${TARGET}/seed\n` +
-             `  Microservices: curl -X POST ${TARGET}/products/seed`);
+            `Seed the database first:\n` +
+            `  Monolith:      curl -X POST ${TARGET}/seed\n` +
+            `  Microservices: curl -X POST ${TARGET}/products/seed`);
     }
 
     const body = JSON.parse(res.body);
@@ -67,21 +75,21 @@ export function setup() {
 
     if (ids.length === 0) {
         fail(`setup() failed: GET /products returned an empty array. ` +
-             `Seed the database first:\n` +
-             `  Monolith:      curl -X POST ${TARGET}/seed\n` +
-             `  Microservices: curl -X POST ${TARGET}/products/seed`);
+            `Seed the database first:\n` +
+            `  Monolith:      curl -X POST ${TARGET}/seed\n` +
+            `  Microservices: curl -X POST ${TARGET}/products/seed`);
     }
 
     console.log(`[setup] arch=${ARCH} | target=${TARGET} | ` +
-                `${ids.length} product IDs: ${ids.join(', ')}`);
+        `${ids.length} product IDs: ${ids.join(', ')}`);
     return { TARGET, ids, arch: ARCH };
 }
 
 // ─── VU-level session state ────────────────────────────────────────────────────
 // These variables are module-level so they persist across iterations WITHIN the
 // same VU. Each VU logs in once (first iteration), then reuses the token.
-let vToken   = null;  // JWT from login
-let vUserId  = null;  // userId returned by login
+let vToken = null;  // JWT from login
+let vUserId = null;  // userId returned by login
 
 // ─── default() receives setup() data as first argument ────────────────────────
 export default function (data) {
@@ -94,6 +102,7 @@ export default function (data) {
     if (!vToken) {
         const loginPayload = JSON.stringify({ username: VU_USERNAME(), password: VU_PASSWORD });
         const loginRes = http.post(`${TARGET}/auth/login`, loginPayload, {
+            timeout: '120s',
             headers: { 'Content-Type': 'application/json' },
             tags: { name: 'SessionLogin', arch }
         });
@@ -102,11 +111,11 @@ export default function (data) {
 
         if (loginRes.status === 200) {
             const body = JSON.parse(loginRes.body);
-            vToken  = body.token;
+            vToken = body.token;
             vUserId = String(body.userId);
         } else {
             // Login failed — mark so we skip this VU rather than polluting data
-            vToken  = '__failed__';
+            vToken = '__failed__';
             vUserId = '1';
         }
 
@@ -128,12 +137,17 @@ export default function (data) {
         'Authorization': `Bearer ${vToken}`
     };
 
+    // Per-request params builder — timeout MUST be here, not just in
+    // options.http.timeout which k6 ignores at the per-request level.
+    const p = (name, extraHeaders = {}) => ({
+        timeout: '120s',
+        tags: { name, arch },
+        headers: { ...authHeaders, ...extraHeaders }
+    });
+
     // ── FetchCatalog — fires EVERY iteration ─────────────────────────────────
     // Deterministic cache-read load; shows Redis hit rate collapsing under pressure.
-    let res = http.get(`${TARGET}/products`, {
-        headers: authHeaders,
-        tags: { name: 'FetchCatalog', arch }
-    });
+    let res = http.get(`${TARGET}/products`, p('FetchCatalog'));
     check(res, { 'catalog 200': r => r.status === 200 });
 
     // ── PostComment — fires EVERY iteration ──────────────────────────────────
@@ -146,7 +160,7 @@ export default function (data) {
     res = http.post(
         `${TARGET}/products/${randomProduct}/comments`,
         commentPayload,
-        { headers: authHeaders, tags: { name: 'PostComment', arch } }
+        p('PostComment')
     );
     check(res, { 'comment accepted (201|202)': r => r.status === 201 || r.status === 202 });
 
@@ -155,44 +169,31 @@ export default function (data) {
 
     if (roll < 0.20) {
         // PingDB (20%) — raw DB latency probe, bypasses Redis
-        res = http.get(`${TARGET}/products/ping`, {
-            headers: authHeaders,
-            tags: { name: 'PingDB', arch }
-        });
+        res = http.get(`${TARGET}/products/ping`, p('PingDB'));
         check(res, { 'ping ok': r => r.status === 200 });
 
     } else if (roll < 0.40) {
         // FetchProductDetails (20%)
-        res = http.get(`${TARGET}/products/${randomProduct}`, {
-            headers: authHeaders,
-            tags: { name: 'FetchProductDetails', arch }
-        });
+        res = http.get(`${TARGET}/products/${randomProduct}`, p('FetchProductDetails'));
         check(res, { 'status is 200': r => r.status === 200 });
 
     } else if (roll < 0.55) {
         // FetchOrders (15%) — DB join with auth userId
-        res = http.get(`${TARGET}/orders/${vUserId}`, {
-            headers: authHeaders,
-            tags: { name: 'FetchOrders', arch }
-        });
+        res = http.get(`${TARGET}/orders/${vUserId}`, p('FetchOrders'));
         check(res, { 'status is 200': r => r.status === 200 });
 
     } else if (roll < 0.65) {
         // AuthRegister (10%) — bcrypt hash on server (new user signups)
         const regPayload = JSON.stringify({ username: `k6_${randomString(10)}`, password: 'password123' });
-        res = http.post(`${TARGET}/auth/register`, regPayload, {
-            headers: { 'Content-Type': 'application/json' },
-            tags: { name: 'AuthRegister', arch }
-        });
+        res = http.post(`${TARGET}/auth/register`, regPayload,
+            p('AuthRegister', { 'Content-Type': 'application/json' })
+        );
         check(res, { 'status is 201': r => r.status === 201 });
 
     } else if (roll < 0.80) {
         // LLMSummarize (15%) — external Groq API call; latency wildcard
         const llmPayload = JSON.stringify({ text: 'A standard k6 generated e-commerce product description for stress testing.' });
-        res = http.post(`${TARGET}/llm/summarize`, llmPayload, {
-            headers: authHeaders,
-            tags: { name: 'LLMSummarize', arch }
-        });
+        res = http.post(`${TARGET}/llm/summarize`, llmPayload, p('LLMSummarize'));
         check(res, { 'status is 200': r => r.status === 200 });
 
     } else {
@@ -202,10 +203,7 @@ export default function (data) {
             totalAmount: 99.99,
             products: [{ productId: randomProduct, quantity: 1 }]
         });
-        res = http.post(`${TARGET}/orders`, orderPayload, {
-            headers: authHeaders,
-            tags: { name: 'CreateOrder', arch }
-        });
+        res = http.post(`${TARGET}/orders`, orderPayload, p('CreateOrder'));
         check(res, { 'status is 201': r => r.status === 201 });
     }
 
