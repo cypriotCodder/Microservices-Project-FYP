@@ -33,7 +33,7 @@ echo "▶  Run 1/2 — MICROSERVICES  (target: $MICROSERVICES_URL)"
 echo "   Starting in 3 seconds..."
 sleep 3
 
-docker compose run --no-deps -T --rm \
+DOCKER_CONFIG=$(mktemp -d) /usr/local/bin/docker-compose run --no-deps -T --rm \
     -e TARGET_URL="$MICROSERVICES_URL" \
     -e ARCH="microservices" \
     k6 run --tag arch=microservices \
@@ -43,7 +43,7 @@ MS_CODE=$?
 
 echo ""
 echo "✅ Run 1 complete (exit $MS_CODE). Stopping microservices app layer..."
-(cd "$MICROSERVICES_DIR" && docker compose stop api-gateway product-service order-service auth-service llm-service recommendation-service content-creator 2>&1 | grep -v "^$")
+(cd "$MICROSERVICES_DIR" && DOCKER_CONFIG=$(mktemp -d) /usr/local/bin/docker-compose stop api-gateway product-service order-service auth-service llm-service recommendation-service content-creator 2>&1 | grep -v "^$")
 echo ""
 
 # ─── RUN 2: MONOLITH ──────────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ echo "▶  Run 2/2 — MONOLITH  (target: $MONOLITH_URL)"
 echo "   Starting in 3 seconds..."
 sleep 3
 
-docker compose run --no-deps -T --rm \
+DOCKER_CONFIG=$(mktemp -d) /usr/local/bin/docker-compose run --no-deps -T --rm \
     -e TARGET_URL="$MONOLITH_URL" \
     -e ARCH="monolith" \
     k6 run --tag arch=monolith \
@@ -61,7 +61,7 @@ M_CODE=$?
 
 echo ""
 echo "✅ Run 2 complete (exit $M_CODE). Stopping monolith app layer..."
-(cd "$MONOLITH_DIR" && docker compose stop monolith-backend 2>&1 | grep -v "^$")
+(cd "$MONOLITH_DIR" && DOCKER_CONFIG=$(mktemp -d) /usr/local/bin/docker-compose stop monolith-backend 2>&1 | grep -v "^$")
 echo ""
 
 # ─── COMPARISON ───────────────────────────────────────────────────────────────
@@ -126,11 +126,11 @@ for key, stat, unit, label in rows:
 print("")
 PYEOF
 
-echo "  📊 Grafana dashboard    : http://localhost:3000"
-echo "  📄 Microservices JSON   : $SCRIPT_DIR/results/results-microservices.json"
-echo "  📄 Monolith JSON        : $SCRIPT_DIR/results/results-monolith.json"
+echo "Grafana dashboard    : http://localhost:3000"
+echo "Microservices JSON   : $SCRIPT_DIR/results/results-microservices.json"
+echo "Monolith JSON        : $SCRIPT_DIR/results/results-monolith.json"
 echo ""
-echo "  Restarting stopped services..."
+echo "Restarting stopped services..."
 (cd "$MICROSERVICES_DIR" && docker compose up -d 2>&1 | tail -3)
 (cd "$MONOLITH_DIR" && docker compose up -d monolith-backend 2>&1 | tail -3)
 echo "  Done."
