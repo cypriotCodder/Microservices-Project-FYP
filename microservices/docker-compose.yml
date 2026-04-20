@@ -5,6 +5,7 @@ services:
       - "8080:8080"
     env_file: ./api-gateway/.env
     environment:
+      - SERVICE_NAME=api-gateway
       - AUTH_SERVICE_URL=http://auth-service:3001
       - PRODUCT_SERVICE_URL=http://product-service:3002
       - ORDER_SERVICE_URL=http://order-service:3003
@@ -79,6 +80,7 @@ services:
       - "3002:3002"
     env_file: ./services/product-service/.env
     environment:
+      - SERVICE_NAME=product-service
       - REDIS_URL=redis://redis:6379
       - MONGO_URI=mongodb://root:examplepassword@mongo:27017/microservices_products?authSource=admin
     restart: on-failure
@@ -89,6 +91,7 @@ services:
       - "3003:3003"
     env_file: ./services/order-service/.env
     environment:
+      - SERVICE_NAME=order-service
       - MONGO_URI=mongodb://root:examplepassword@mongo:27017/microservices_orders?authSource=admin
     restart: on-failure
 
@@ -142,6 +145,14 @@ services:
       - rabbitmq
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686" # Web UI
+      - "4318:4318"   # OTLP HTTP receiver
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
 
 volumes:
   postgres_data:

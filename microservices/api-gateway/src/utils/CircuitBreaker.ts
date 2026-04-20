@@ -75,17 +75,19 @@ export const createCircuitBreakerProxy = (proxyOptions: Options) => {
     // Enhance proxy options with interceptors
     const enhancedOptions: Options = {
         ...proxyOptions,
-        onError: (err, req, res) => {
-            breaker.recordFailure();
-            console.error(`[Proxy Error] ${err.message}. Failure count: ${(breaker as any).failureCount}`);
-            if (!res.headersSent) {
-               (res as Response).status(502).json({ error: 'Bad Gateway', message: 'The downstream service failed or timed out.' });
+        on: {
+            error: (err, req, res) => {
+                breaker.recordFailure();
+                console.error(`[Proxy Error] ${err.message}. Failure count: ${(breaker as any).failureCount}`);
+                if (!res.headersSent) {
+                   (res as Response).status(502).json({ error: 'Bad Gateway', message: 'The downstream service failed or timed out.' });
+                }
+            },
+            proxyRes: (proxyRes, req, res) => {
+                // Any successful proxy connection (even a 404/500 from the microservice app layer itself) 
+                // means the network TCP connection is healthy. We only break on network/timeout failures.
+                breaker.recordSuccess();
             }
-        },
-        onProxyRes: (proxyRes, req, res) => {
-            // Any successful proxy connection (even a 404/500 from the microservice app layer itself) 
-            // means the network TCP connection is healthy. We only break on network/timeout failures.
-            breaker.recordSuccess();
         }
     };
 
