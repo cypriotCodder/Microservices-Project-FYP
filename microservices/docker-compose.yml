@@ -50,10 +50,7 @@ services:
     # 'save ""' disables RDB snapshots — avoids loading a massive persisted
     # comment dump at startup that consumes memory before any VU connects.
     command: >
-      redis-server
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-      --save ""
+      redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save ""
 
   postgres:
     image: postgres:15
@@ -130,7 +127,7 @@ services:
   client:
     build: ./client
     ports:
-      - "5173:5173"
+      - "5178:5173"
     environment:
       - VITE_API_URL=http://localhost:8080
     volumes:
@@ -150,7 +147,7 @@ services:
     image: jaegertracing/all-in-one:latest
     ports:
       - "16686:16686" # Web UI
-      - "4318:4318"   # OTLP HTTP receiver
+      - "4318:4318" # OTLP HTTP receiver
     environment:
       - COLLECTOR_OTLP_ENABLED=true
 

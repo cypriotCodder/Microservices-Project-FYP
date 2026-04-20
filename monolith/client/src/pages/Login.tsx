@@ -28,7 +28,7 @@ export function Login() {
     return (
         <div className="container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
             <div className="card" style={{ width: '100%', maxWidth: '400px' }}>
-                <h2 className="page-title" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>Pro Login</h2>
+                <h2 className="page-title" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>MicroShop Login</h2>
                 <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <div>
                         <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Username</label>

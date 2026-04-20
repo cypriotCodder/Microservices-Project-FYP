@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { Options, createProxyMiddleware } from 'http-proxy-middleware';
+import { ServerResponse } from 'http';
 
 enum BreakerState {
     CLOSED = 'CLOSED',       // Normal operation
@@ -79,7 +80,7 @@ export const createCircuitBreakerProxy = (proxyOptions: Options) => {
             error: (err, req, res) => {
                 breaker.recordFailure();
                 console.error(`[Proxy Error] ${err.message}. Failure count: ${(breaker as any).failureCount}`);
-                if (!res.headersSent) {
+                if (res instanceof ServerResponse && !res.headersSent) {
                    (res as Response).status(502).json({ error: 'Bad Gateway', message: 'The downstream service failed or timed out.' });
                 }
             },

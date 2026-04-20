@@ -19,7 +19,7 @@ This boots **all** services: API Gateway, Auth, Product, Order, Recommendation, 
 | Component         | Local URL                        |
 |-------------------|----------------------------------|
 | API Gateway       | http://localhost:8080             |
-| Frontend (Vite)   | http://localhost:5173             |
+| Frontend (Vite)   | http://localhost:5178             |
 | RabbitMQ Admin    | http://localhost:15672            |
 | Jaeger Tracing UI | http://localhost:16686            |
 
@@ -168,7 +168,7 @@ curl http://localhost:4000/health
 | Port  | Service                          | Stack          |
 |-------|----------------------------------|----------------|
 | 8080  | API Gateway                      | Microservices  |
-| 5173  | Microservices Frontend (Vite)    | Microservices  |
+| 5178  | Microservices Frontend (Vite)    | Microservices  |
 | 3001  | Auth Service                     | Microservices  |
 | 3002  | Product Service                  | Microservices  |
 | 3003  | Order Service                    | Microservices  |
@@ -189,3 +189,13 @@ curl http://localhost:4000/health
 | 5433  | PostgreSQL (mapped from 5432)    | Monolith       |
 | 3000  | Grafana Dashboard                | Performance    |
 | 8086  | InfluxDB                         | Performance    |
+
+---
+
+## 11. Default Credentials
+
+**Admin Account**
+- **Email/Username**: `admin@fyp.com`
+- **Password**: `admin`
+
+These credentials can be used to log into the frontend applications (both Microservices and Monolith) to access administrative features.
