@@ -18,10 +18,10 @@ This boots **all** services: API Gateway, Auth, Product, Order, Recommendation, 
 
 | Component         | Local URL                        |
 |-------------------|----------------------------------|
-| API Gateway       | http://localhost:8080             |
-| Frontend (Vite)   | http://localhost:5178             |
-| RabbitMQ Admin    | http://localhost:15672            |
-| Jaeger Tracing UI | http://localhost:16686            |
+| API Gateway       | http://localhost:8080            |
+| Frontend (Vite)   | http://localhost:5178            |
+| RabbitMQ Admin    | http://localhost:15672           |
+| Jaeger Tracing UI | http://localhost:16686           |
 
 ### Monolith Architecture
 ```bash
