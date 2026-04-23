@@ -94,8 +94,10 @@ services:
 
   recommendation-service:
     build: ./services/recommendation-service
+    deploy:
+      replicas: 3
     ports:
-      - "3004:3004"
+      - "3004"
     env_file: ./services/recommendation-service/.env
     environment:
       - DATABASE_URL=postgresql://postgres:8011nedimK216@postgres:5432/microservices_db?schema=recommendation
@@ -145,6 +147,7 @@ services:
 
   pumba:
     image: gaiaadm/pumba:latest
+    profiles: ["chaos"]
     command: netem --duration 5m delay --time 5000 re2:.*llm-service.*
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

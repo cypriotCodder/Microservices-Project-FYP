@@ -199,3 +199,29 @@ curl http://localhost:4000/health
 - **Password**: `admin`
 
 These credentials can be used to log into the frontend applications (both Microservices and Monolith) to access administrative features.
+
+---
+
+## 12. Distributed Tracing (Observability)
+
+To verify the microservices' network telemetry flows in real-time, navigate to your **Jaeger UI** instances:
+
+1. Open a browser and visit: `http://localhost:16686`
+2. Under "Service", you should actively identify traces mapped out for `api-gateway`, `order-service`, `product-service`, `auth-service`, `llm-service`, and `recommendation-service`.
+3. Traces map the physical time packets spend moving through the bridged `docker-compose_default` network.
+
+---
+
+## 13. Chaos Engineering (Pumba)
+
+The `Pumba` framework has been injected seamlessly into the Docker microservices configuration as a Chaos Agent to simulate artificial latency. By default, **Pumba will NOT execute under generic boot sequences**. 
+
+### How to Execute a Chaos Load-Test:
+To explicitly test the `api-gateway` circuit breaker against a broken microservices node (`llm-service`), you must run the Docker-Compose with the `chaos` profile explicitly attached.
+
+```bash
+cd microservices
+docker-compose --profile chaos up -d --build
+```
+This forces Pumba into the active Docker socket array. It attaches a continuous `tc netem` 5,000-millisecond delay penalty exactly onto the `llm-service`'s network interface.
+You can cross-reference the Jaeger traces or the Grafana UI under `k6` load and visually watch the API Gateway sever the delayed routes dynamically!
