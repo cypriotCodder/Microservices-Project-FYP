@@ -143,6 +143,12 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  pumba:
+    image: gaiaadm/pumba:latest
+    command: netem --duration 5m delay --time 5000 re2:.*llm-service.*
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
   jaeger:
     image: jaegertracing/all-in-one:latest
     ports:
