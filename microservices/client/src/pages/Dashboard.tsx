@@ -25,14 +25,31 @@ export function Dashboard() {
 
     const [selectedCategory, setSelectedCategory] = useState<string>('All');
     const [sortOption, setSortOption] = useState<string>('default');
+    
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState<number>(1);
+    const [totalPages, setTotalPages] = useState<number>(1);
+    const [totalProducts, setTotalProducts] = useState<number>(0);
+    const limit = 12; // Items per page
 
     useEffect(() => {
         const loadDashboardData = async () => {
             try {
-                // Fetch all products
-                const prodData = await fetchFromAPI('/products');
-                const allProducts: Product[] = Array.isArray(prodData) ? prodData : [];
+                // Fetch paginated products correctly using query params
+                const prodData = await fetchFromAPI(`/products?page=${currentPage}&limit=${limit}&category=${encodeURIComponent(selectedCategory)}&sort=${sortOption}`);
+                
+                // If it's the new paginated structure, extract products
+                const isPaginated = prodData && typeof prodData === 'object' && !Array.isArray(prodData) && 'products' in prodData;
+                const allProducts: Product[] = isPaginated ? prodData.products : (Array.isArray(prodData) ? prodData : []);
+                
                 setProducts(allProducts);
+                if (isPaginated) {
+                    setTotalPages(prodData.totalPages);
+                    setTotalProducts(prodData.total);
+                } else {
+                    setTotalPages(1);
+                    setTotalProducts(allProducts.length);
+                }
 
                 // Fetch real user recommendations
                 const userStr = localStorage.getItem('user');
@@ -42,14 +59,12 @@ export function Dashboard() {
                 const recData: RecommendationResponse = await fetchFromAPI(`/recommendations/${currentUserId}`); // Fetching for current user
                 const recProductIds = recData.recommendations.map(r => r.productId);
 
-                // Filter products that exist in recommendations
+                // Re-fetch these specific products since our paginated view might not have them
                 let recProducts = allProducts.filter(p => recProductIds.includes(p._id));
 
                 if (recProducts.length === 0 && allProducts.length >= 3) {
-                    // Fallback to top 3 generic products if the user has a fresh account or dummy IDs failed
                     recProducts = allProducts.slice(0, 3);
-                } else {
-                    // Sort them by the order returned by the recommendation service (highest score first)
+                } else if (recProducts.length > 0) {
                     recProducts.sort((a, b) => recProductIds.indexOf(a._id) - recProductIds.indexOf(b._id));
                 }
 
@@ -62,7 +77,12 @@ export function Dashboard() {
         };
 
         loadDashboardData();
-    }, []);
+    }, [currentPage, selectedCategory, sortOption]); // Trigger automatically when filters change
+
+    // Automatically scroll to top gracefully whenever the page index skips
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [currentPage]);
 
     const handleOrder = async (product: Product) => {
         try {
@@ -78,7 +98,6 @@ export function Dashboard() {
                     products: [{ productId: product._id, quantity: 1 }]
                 })
             });
-            // Update the local state to reflect the stock decrease immediately
             setProducts(prevProducts =>
                 prevProducts.map(p =>
                     p._id === product._id ? { ...p, stock: p.stock - 1 } : p
@@ -90,27 +109,13 @@ export function Dashboard() {
         }
     };
 
-    // Get unique categories for the dropdown
-    const availableCategories = ['All', ...Array.from(new Set(products.map(p => p.category || 'Uncategorized')))];
+    // Hardcode core categories to support DB pagination seamlessly
+    const availableCategories = ['All', 'Load Test', 'Electronics', 'Clothing', 'Home', 'Books', 'Toys', 'Sports', 'Other'];
 
-    // Filter and Sort Logic
-    let processedProducts = [...products];
+    // All sorting and filtering is now managed by the backend
+    const processedProducts = products;
 
-    if (selectedCategory !== 'All') {
-        processedProducts = processedProducts.filter(p => (p.category || 'Uncategorized') === selectedCategory);
-    }
-
-    if (sortOption === 'price-asc') {
-        processedProducts.sort((a, b) => a.price - b.price);
-    } else if (sortOption === 'price-desc') {
-        processedProducts.sort((a, b) => b.price - a.price);
-    } else if (sortOption === 'name-asc') {
-        processedProducts.sort((a, b) => a.name.localeCompare(b.name));
-    } else if (sortOption === 'name-desc') {
-        processedProducts.sort((a, b) => b.name.localeCompare(a.name));
-    }
-
-    // Group processed products by category
+    // Group processed products by category for the masonry layout
     const productsByCategory = processedProducts.reduce((acc, product) => {
         const cat = product.category || 'Uncategorized';
         if (!acc[cat]) acc[cat] = [];
@@ -215,10 +220,13 @@ export function Dashboard() {
                         )}
 
                         {/* Catalog Header */}
-                        <div style={{ marginTop: '2rem' }}>
+                        <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <h1 className="page-title" style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>
                                 {selectedCategory === 'All' ? 'Store Catalog' : selectedCategory}
                             </h1>
+                            <Link to="/publish" className="btn" style={{ textDecoration: 'none', padding: '0.6rem 1.2rem', backgroundColor: 'var(--accent-color)', color: '#fff', borderRadius: '4px', fontWeight: 'bold' }}>
+                                + Publish Product
+                            </Link>
                         </div>
 
                         {/* Control Bar: Categories, Sorting, and Item Count */}
@@ -233,7 +241,7 @@ export function Dashboard() {
                             gap: '1rem'
                         }}>
                             <div style={{ fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.4)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                                Showing <span style={{ color: 'var(--text-color)', fontWeight: 'bold' }}>{processedProducts.length}</span> Product{processedProducts.length !== 1 ? 's' : ''} {products.length > processedProducts.length ? `(out of ${products.length} total)` : ''}
+                                Showing <span style={{ color: 'var(--text-color)', fontWeight: 'bold' }}>{products.length}</span> Product{products.length !== 1 ? 's' : ''} {totalProducts > products.length ? `(out of ${totalProducts} total)` : ''}
                             </div>
 
                             <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
@@ -254,7 +262,7 @@ export function Dashboard() {
                                         onFocus={(e) => e.target.style.borderBottom = '1px solid var(--accent-color)'}
                                         onBlur={(e) => e.target.style.borderBottom = '1px solid rgba(255, 255, 255, 0.2)'}
                                         value={selectedCategory}
-                                        onChange={(e) => setSelectedCategory(e.target.value)}
+                                        onChange={(e) => { setSelectedCategory(e.target.value); setCurrentPage(1); }}
                                     >
                                         {availableCategories.map(cat => (
                                             <option key={cat} value={cat} style={{ backgroundColor: 'var(--bg-color)', color: 'white' }}>{cat}</option>
@@ -279,7 +287,7 @@ export function Dashboard() {
                                         onFocus={(e) => e.target.style.borderBottom = '1px solid var(--accent-color)'}
                                         onBlur={(e) => e.target.style.borderBottom = '1px solid rgba(255, 255, 255, 0.2)'}
                                         value={sortOption}
-                                        onChange={(e) => setSortOption(e.target.value)}
+                                        onChange={(e) => { setSortOption(e.target.value); setCurrentPage(1); }}
                                     >
                                         <option value="default" style={{ backgroundColor: 'var(--bg-color)', color: 'white' }}>Featured</option>
                                         <option value="name-asc" style={{ backgroundColor: 'var(--bg-color)', color: 'white' }}>Name: A-Z</option>
@@ -304,6 +312,51 @@ export function Dashboard() {
                                 </div>
                             </div>
                         ))}
+
+                        {/* Pagination Controls */}
+                        {totalPages > 1 && (
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '4rem', marginBottom: '2rem' }}>
+                                <button 
+                                    className="btn" 
+                                    disabled={currentPage === 1} 
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    style={{ opacity: currentPage === 1 ? 0.5 : 1, padding: '0.5rem 1rem' }}
+                                >
+                                    &laquo; Prev
+                                </button>
+                                
+                                <select 
+                                    value={currentPage}
+                                    onChange={(e) => setCurrentPage(Number(e.target.value))}
+                                    style={{
+                                        backgroundColor: 'transparent',
+                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                        color: 'var(--text-color)',
+                                        fontSize: '0.95rem',
+                                        padding: '0.4rem 0.8rem',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        outline: 'none',
+                                        fontWeight: 500
+                                    }}
+                                >
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+                                        <option key={pageNum} value={pageNum} style={{ backgroundColor: 'var(--bg-color)', color: 'white' }}>
+                                            Page {pageNum} of {totalPages}
+                                        </option>
+                                    ))}
+                                </select>
+                                
+                                <button 
+                                    className="btn" 
+                                    disabled={currentPage === totalPages} 
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    style={{ opacity: currentPage === totalPages ? 0.5 : 1, padding: '0.5rem 1rem' }}
+                                >
+                                    Next &raquo;
+                                </button>
+                            </div>
+                        )}
                     </>
                 )}
             </div>

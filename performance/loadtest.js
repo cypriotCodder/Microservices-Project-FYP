@@ -68,10 +68,11 @@ export function setup() {
     }
 
     const body = JSON.parse(res.body);
+    const dataArray = Array.isArray(body) ? body : (body.products || []);
     // Both architectures return an array.
     // Monolith (Postgres)  → integer id field  e.g. 1, 2, 3
     // Microservices (Mongo) → string _id field e.g. "65bf73e934..."
-    const ids = body.map(p => String(p._id || p.id)).filter(Boolean);
+    const ids = dataArray.map(p => String(p._id || p.id)).filter(Boolean);
 
     if (ids.length === 0) {
         fail(`setup() failed: GET /products returned an empty array. ` +
@@ -167,13 +168,25 @@ export default function (data) {
     // ── One supplementary request, chosen probabilistically ──────────────────
     const roll = Math.random();
 
-    if (roll < 0.20) {
-        // PingDB (20%) — raw DB latency probe, bypasses Redis
+    if (roll < 0.10) {
+        // PublishProduct (10%) - Native write + full catalog cache invalidate
+        const prodPayload = JSON.stringify({
+            name: `k6 Stress Product VU${__VU}`,
+            price: 49.99,
+            description: "Automatically published load test product.",
+            stock: 100,
+            category: "Load Test"
+        });
+        res = http.post(`${TARGET}/products`, prodPayload, p('PublishProduct'));
+        check(res, { 'status is 201': r => r.status === 201 });
+
+    } else if (roll < 0.25) {
+        // PingDB (15%) — raw DB latency probe, bypasses Redis
         res = http.get(`${TARGET}/products/ping`, p('PingDB'));
         check(res, { 'ping ok': r => r.status === 200 });
 
     } else if (roll < 0.40) {
-        // FetchProductDetails (20%)
+        // FetchProductDetails (15%)
         res = http.get(`${TARGET}/products/${randomProduct}`, p('FetchProductDetails'));
         check(res, { 'status is 200': r => r.status === 200 });
 

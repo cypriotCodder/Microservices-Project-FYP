@@ -11,6 +11,11 @@ router.get('/health', (req, res) => {
 // GET admin order metrics
 router.get('/admin/metrics', async (req, res) => {
     try {
+        const cachedMetrics = await redisClient.get('admin:metrics');
+        if (cachedMetrics) {
+            return res.json(JSON.parse(cachedMetrics));
+        }
+
         const totalOrders = await prisma.order.count();
 
         const revenueAgg = await prisma.order.aggregate({ _sum: { totalAmount: true } });
@@ -48,7 +53,11 @@ router.get('/admin/metrics', async (req, res) => {
             ORDER BY "_id" ASC
         `;
 
-        res.json({ totalOrders, totalRevenue, topProducts, ordersPerMinute });
+        const payload = { totalOrders, totalRevenue, topProducts, ordersPerMinute };
+        
+        await redisClient.setEx('admin:metrics', 15, JSON.stringify(payload));
+        
+        res.json(payload);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch admin order metrics' });
     }
@@ -109,15 +118,17 @@ router.delete('/:id', async (req, res) => {
         });
         if (!order) return res.status(404).json({ message: 'Order not found' });
 
-        // Refund stock for each item
-        for (const item of order.items) {
-            await prisma.product.update({
-                where: { id: item.productId },
-                data: { stock: { increment: item.quantity } }
-            });
-            await redisClient.del(`product:${item.productId}`);
+        // Refund stock ONLY if the order was completed (since pending orders don't decrement stock)
+        if (order.status === 'COMPLETED') {
+            for (const item of order.items) {
+                await prisma.product.update({
+                    where: { id: item.productId },
+                    data: { stock: { increment: item.quantity } }
+                });
+                await redisClient.del(`product:${item.productId}`);
+            }
+            await redisClient.del('products:all');
         }
-        await redisClient.del('products:all');
 
         await prisma.order.delete({ where: { id: orderId } }); // cascade deletes OrderItems
 
@@ -138,13 +149,15 @@ router.delete('/all/:userId', async (req, res) => {
 
         let stockRefunded = false;
         for (const order of orders) {
-            for (const item of order.items) {
-                await prisma.product.update({
-                    where: { id: item.productId },
-                    data: { stock: { increment: item.quantity } }
-                });
-                await redisClient.del(`product:${item.productId}`);
-                stockRefunded = true;
+            if (order.status === 'COMPLETED') {
+                for (const item of order.items) {
+                    await prisma.product.update({
+                        where: { id: item.productId },
+                        data: { stock: { increment: item.quantity } }
+                    });
+                    await redisClient.del(`product:${item.productId}`);
+                    stockRefunded = true;
+                }
             }
         }
         if (stockRefunded) {

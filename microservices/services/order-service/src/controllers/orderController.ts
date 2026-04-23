@@ -55,21 +55,21 @@ export const deleteOrder = async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Order not found" });
     }
 
-    // Send Event to RabbitMQ fully refunding stock
+    // Send Event to RabbitMQ fully refunding stock ONLY if the order was completed
     const channel = getChannel();
 
-    if (channel) {
-      const eventData = JSON.stringify({
-        orderId: order._id,
-        products: order.products,
-        userId: order.userId
-      });
+    if (channel && order.status === 'COMPLETED') {
+        const eventData = JSON.stringify({
+            orderId: order._id,
+            products: order.products,
+            userId: order.userId
+        });
 
-      // Send to the 'ORDER_DELETED' queue
-      channel.sendToQueue("ORDER_DELETED", Buffer.from(eventData));
-      console.log(`🗑️ Event Sent: ORDER_DELETED for Order ${order._id}`);
-    } else {
-      console.warn("⚠️ RabbitMQ not connected! Order deleted but stock not refunded.");
+        // Send to the 'ORDER_DELETED' queue
+        channel.sendToQueue("ORDER_DELETED", Buffer.from(eventData));
+        console.log(`🗑️ Event Sent: ORDER_DELETED for Order ${order._id}`);
+    } else if (!channel) {
+        console.warn("⚠️ RabbitMQ not connected! Order deleted but stock not refunded.");
     }
 
     // Delete the order 
@@ -93,15 +93,17 @@ export const deleteAllOrders = async (req: Request, res: Response) => {
 
     if (channel) {
       for (const order of orders) {
-        const eventData = JSON.stringify({
-          orderId: order._id,
-          products: order.products,
-          userId: order.userId
-        });
+        if (order.status === 'COMPLETED') {
+            const eventData = JSON.stringify({
+                orderId: order._id,
+                products: order.products,
+                userId: order.userId
+            });
 
-        // Send to the 'ORDER_DELETED' queue
-        channel.sendToQueue("ORDER_DELETED", Buffer.from(eventData));
-        console.log(`🗑️ Event Sent: ORDER_DELETED for Order ${order._id}`);
+            // Send to the 'ORDER_DELETED' queue
+            channel.sendToQueue("ORDER_DELETED", Buffer.from(eventData));
+            console.log(`🗑️ Event Sent: ORDER_DELETED for Order ${order._id}`);
+        }
       }
     } else {
       console.warn("⚠️ RabbitMQ not connected! Orders deleted but stock not refunded.");

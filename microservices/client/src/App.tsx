@@ -8,6 +8,7 @@ import { TrafficControl } from './pages/TrafficControl';
 import ContentControl from './pages/ContentControl';
 import ProductDetails from './pages/ProductDetails';
 import { Admin } from './pages/Admin';
+import { PublishProduct } from './pages/PublishProduct';
 import './styles/main.css';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -63,6 +64,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Admin />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/publish"
+          element={
+            <ProtectedRoute>
+              <PublishProduct />
             </ProtectedRoute>
           }
         />

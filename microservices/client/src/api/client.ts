@@ -3,10 +3,16 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 export async function fetchFromAPI(endpoint: string, options: RequestInit = {}) {
     const url = `${API_URL}${endpoint}`;
 
-    const headers = {
+    const userStr = localStorage.getItem('user');
+    const token = userStr ? JSON.parse(userStr).token : null;
+    const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        ...options.headers,
+        ...options.headers as Record<string, string>,
     };
+
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
 
     const response = await fetch(url, {
         ...options,

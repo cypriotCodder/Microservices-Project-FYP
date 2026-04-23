@@ -8,28 +8,55 @@ router.get('/health', (req, res) => {
     res.json({ status: 'Product Module is running' });
 });
 
-// GET all products (with Redis cache)
+// GET all products (paginated and filtered)
 router.get('/', async (req, res) => {
     try {
-        const cachedProducts = await redisClient.get('products:all');
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const category = req.query.category as string || "All";
+        const sort = req.query.sort as string || "";
+
+        // Predictable 60s cache block mimicking microservices flow
+        const cacheKey = `products:page:${page}:limit:${limit}:cat:${category}:sort:${sort}`;
+        const cachedProducts = await redisClient.get(cacheKey);
         if (cachedProducts) {
             return res.json(JSON.parse(cachedProducts));
         }
 
-        const products = await prisma.product.findMany({
-            select: {
-                id: true,
-                name: true,
-                price: true,
-                stock: true,
-                image: true,
-                category: true
-            },
-            orderBy: { createdAt: 'desc' }
-        });
+        let whereClause: any = {};
+        if (category !== "All") {
+            whereClause.category = category;
+        }
 
-        await redisClient.setEx('products:all', 3600, JSON.stringify(products));
-        res.json(products);
+        let orderByClause: any = { createdAt: 'desc' };
+        if (sort === 'price-asc') orderByClause = { price: 'asc' };
+        if (sort === 'price-desc') orderByClause = { price: 'desc' };
+        if (sort === 'name-asc') orderByClause = { name: 'asc' };
+        if (sort === 'name-desc') orderByClause = { name: 'desc' };
+
+        const skip = (page - 1) * limit;
+
+        const [products, total] = await Promise.all([
+            prisma.product.findMany({
+                where: whereClause,
+                select: {
+                    id: true,
+                    name: true,
+                    price: true,
+                    stock: true,
+                    image: true,
+                    category: true
+                },
+                orderBy: orderByClause,
+                skip: skip,
+                take: limit
+            }),
+            prisma.product.count({ where: whereClause })
+        ]);
+
+        const responseData = { products, total, page, totalPages: Math.ceil(total / limit) };
+        await redisClient.setEx(cacheKey, 60, JSON.stringify(responseData));
+        res.json(responseData);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching products', error });
     }

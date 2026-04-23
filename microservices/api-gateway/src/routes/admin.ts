@@ -7,8 +7,19 @@ const AUTH_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:3001';
 const ORDER_URL = process.env.ORDER_SERVICE_URL || 'http://localhost:3003';
 const PRODUCT_URL = process.env.PRODUCT_SERVICE_URL || 'http://localhost:3002';
 
+let cachedAdminMetrics: any = null;
+let metricsCacheTimestamp = 0;
+const METRICS_TTL_MS = 15000;
+
 router.get('/metrics', requireAdmin, async (req, res) => {
     try {
+        const now = Date.now();
+        if (cachedAdminMetrics && (now - metricsCacheTimestamp < METRICS_TTL_MS)) {
+            // Update telemetry dynamically even on cached payloads
+            cachedAdminMetrics.telemetry = getAggregatedMetrics();
+            return res.json(cachedAdminMetrics);
+        }
+
         // 1. Fetch total users
         let totalUsers = 0;
         try {
@@ -23,7 +34,7 @@ router.get('/metrics', requireAdmin, async (req, res) => {
         let totalOrders = 0;
         let totalRevenue = 0;
         let topProductsRaw: any[] = [];
-        let ordersPerMinute = [];
+        let ordersPerMinute: any[] = [];
 
         try {
             const orderRes = await fetch(`${ORDER_URL}/admin/metrics`);
@@ -37,38 +48,40 @@ router.get('/metrics', requireAdmin, async (req, res) => {
         } catch (e) { console.error('Failed to fetch order metrics'); }
 
         // 3. Fetch product details for top products to map names and prices
-        const enrichedTopProducts = [];
-        for (const item of topProductsRaw) {
+        const enrichedTopProducts = await Promise.all(topProductsRaw.map(async (item: any) => {
             try {
                 const prodRes = await fetch(`${PRODUCT_URL}/${item._id}`);
                 if (prodRes.ok) {
                     const prodData = await prodRes.json();
-                    enrichedTopProducts.push({
+                    return {
                         _id: item._id,
                         name: prodData.name,
                         price: prodData.price,
                         totalSold: item.totalSold
-                    });
+                    };
                 } else {
-                    enrichedTopProducts.push({ _id: item._id, name: 'Unknown Product', totalSold: item.totalSold });
+                    return { _id: item._id, name: 'Unknown Product', totalSold: item.totalSold };
                 }
             } catch (e) {
-                enrichedTopProducts.push({ _id: item._id, name: 'Error Fetching', totalSold: item.totalSold });
+                return { _id: item._id, name: 'Error Fetching', totalSold: item.totalSold };
             }
-        }
+        }));
 
         // 4. Extract own telemetry metrics
         const systemTelemetry = getAggregatedMetrics();
 
-        // 5. Combine and send payload
-        res.json({
+        // 5. Combine, cache, and send payload
+        cachedAdminMetrics = {
             users: totalUsers,
             orders: totalOrders,
             revenue: totalRevenue,
             topProducts: enrichedTopProducts,
             chartData: ordersPerMinute,
             telemetry: systemTelemetry
-        });
+        };
+        metricsCacheTimestamp = now;
+
+        res.json(cachedAdminMetrics);
     } catch (error) {
         console.error('API Gateway Admin Metrics Error:', error);
         res.status(500).json({ error: 'Failed to aggregate admin metrics' });

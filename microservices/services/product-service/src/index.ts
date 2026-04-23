@@ -23,15 +23,40 @@ app.get('/health', (req, res) => {
 
 app.get('/', async (req, res) => {
     try {
-        const cachedProducts = await redisClient.get('products:all');
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const category = req.query.category as string || "All";
+        const sort = req.query.sort as string || ""; // e.g. "price-asc"
+
+        // Short 60s cache specifically for paginated and sorted queries to limit redis stale drift
+        const cacheKey = `products:page:${page}:limit:${limit}:cat:${category}:sort:${sort}`;
+        const cachedProducts = await redisClient.get(cacheKey);
         if (cachedProducts) {
             return res.json(JSON.parse(cachedProducts));
         }
 
-        const products = await Product.find().select('-description');
+        let query: any = {};
+        if (category !== "All") {
+            query.category = category;
+        }
+
+        let sortQuery: any = {};
+        if (sort === 'price-asc') sortQuery.price = 1;
+        if (sort === 'price-desc') sortQuery.price = -1;
+        if (sort === 'name-asc') sortQuery.name = 1;
+        if (sort === 'name-desc') sortQuery.name = -1;
+
+        const skip = (page - 1) * limit;
+
+        const [products, total] = await Promise.all([
+            Product.find(query).select('-description').sort(sortQuery).skip(skip).limit(limit),
+            Product.countDocuments(query)
+        ]);
+
+        const responseData = { products, total, page, totalPages: Math.ceil(total / limit) };
         
-        await redisClient.setEx('products:all', 3600, JSON.stringify(products));
-        res.json(products);
+        await redisClient.setEx(cacheKey, 60, JSON.stringify(responseData));
+        res.json(responseData);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching products', error });
     }

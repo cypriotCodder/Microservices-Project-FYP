@@ -4,8 +4,8 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
 
 export const authMiddleware = (req: Request, res: Response, next: NextFunction): void => {
-    // Allow Read-Only operations without authentication
-    if (req.method === 'GET') {
+    // Allow Read-Only operations and CORS preflights without authentication
+    if (req.method === 'GET' || req.method === 'OPTIONS') {
         return next();
     }
 
