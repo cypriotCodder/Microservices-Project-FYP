@@ -2,11 +2,19 @@ import { Router } from 'express';
 import { requireAdmin } from '../middleware/requireAdmin';
 import { getAggregatedMetrics } from '../middleware/telemetry';
 import { prisma } from '../config/prisma';
+import { redisClient } from '../config/redis';
 
 const router = Router();
 
 router.get('/metrics', requireAdmin, async (req, res) => {
     try {
+        const cachedAdminMetrics = await redisClient.get('admin:metrics_global');
+        if (cachedAdminMetrics) {
+            const parsed = JSON.parse(cachedAdminMetrics);
+            parsed.telemetry = getAggregatedMetrics();
+            return res.json(parsed);
+        }
+
         // 1. Total users
         const totalUsers = await prisma.user.count();
 
@@ -48,17 +56,21 @@ router.get('/metrics', requireAdmin, async (req, res) => {
             ORDER BY "_id" ASC
         `;
 
-        // 5. Telemetry
+        // 5. Combine and Set Cache
         const systemTelemetry = getAggregatedMetrics();
 
-        res.json({
+        const payload = {
             users: totalUsers,
             orders: totalOrders,
             revenue: totalRevenue,
             topProducts: enrichedTopProducts,
             chartData: ordersPerMinute,
-            telemetry: systemTelemetry
-        });
+        };
+
+        await redisClient.setEx('admin:metrics_global', 15, JSON.stringify(payload));
+        
+        // Return active telemetry stitched in
+        res.json({ ...payload, telemetry: systemTelemetry });
 
     } catch (error) {
         console.error('Monolith Admin Metrics Error:', error);
