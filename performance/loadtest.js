@@ -209,8 +209,15 @@ export default function (data) {
         res = http.post(`${TARGET}/llm/summarize`, llmPayload, p('LLMSummarize'));
         check(res, { 'status is 200': r => r.status === 200 });
 
+    } else if (roll < 0.90) {
+        // CreateContent (10%) — triggers microservice cross-communication
+        const internalTarget = TARGET.includes('8080') ? 'http://api-gateway:8080' : TARGET;
+        const contentPayload = JSON.stringify({ lengthText: '2 sentences', targetUrl: internalTarget });
+        res = http.post(`${TARGET}/content/generate-product`, contentPayload, p('CreateContent'));
+        check(res, { 'status is 200|201': r => r.status === 200 || r.status === 201 });
+
     } else {
-        // CreateOrder (20%) — write + stock decrement + cache invalidation
+        // CreateOrder (10%) — write + stock decrement + cache invalidation
         const orderPayload = JSON.stringify({
             userId: vUserId,
             totalAmount: 99.99,
