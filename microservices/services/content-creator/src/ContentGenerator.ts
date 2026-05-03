@@ -43,7 +43,7 @@ export class ContentGenerator {
         } else {
             try {
                 // Attempt to dynamically generate description via the internal LLM proxy
-                const llmRes = await axios.post(`${targetUrl}/llm/generate-description`, { name, lengthText });
+                const llmRes = await axios.post(`http://llm-service:3005/generate-description`, { name, lengthText });
                 if (llmRes.data && llmRes.data.description) {
                     description = llmRes.data.description.trim();
                 }
@@ -62,7 +62,7 @@ export class ContentGenerator {
                 stock
             };
 
-            const url = `${targetUrl}/products`;
+            const url = `http://product-service:3002/`;
             const response = await axios.post(url, payload);
             return response.data;
         } catch (error: any) {
@@ -75,7 +75,7 @@ export class ContentGenerator {
     public async generateReview(targetUrl: string): Promise<any> {
         try {
             // 1. Fetch products to get a valid productId
-            const productsUrl = `${targetUrl}/products`;
+            const productsUrl = `http://product-service:3002/`;
             const productsRes = await axios.get(productsUrl);
             const products = productsRes.data;
 
@@ -100,7 +100,7 @@ export class ContentGenerator {
                 rating
             };
 
-            const reviewUrl = `${targetUrl}/products/${productId}/reviews`;
+            const reviewUrl = `http://product-service:3002/${productId}/reviews`;
             const response = await axios.post(reviewUrl, payload);
             return response.data;
         } catch (error: any) {

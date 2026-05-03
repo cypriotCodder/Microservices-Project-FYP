@@ -94,10 +94,8 @@ services:
 
   recommendation-service:
     build: ./services/recommendation-service
-    deploy:
-      replicas: 3
     ports:
-      - "3004"
+      - "3004:3004"
     env_file: ./services/recommendation-service/.env
     environment:
       - DATABASE_URL=postgresql://postgres:8011nedimK216@postgres:5432/microservices_db?schema=recommendation

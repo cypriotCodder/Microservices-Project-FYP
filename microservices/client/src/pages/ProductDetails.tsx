@@ -142,7 +142,7 @@ export default function ProductDetails() {
                 body: JSON.stringify({
                     userId: currentUserId,
                     totalAmount: product.price,
-                    products: [{ productId: product._id, quantity: 1 }]
+                    products: [{ productId: product._id || (product as any).id, quantity: 1 }]
                 })
             });
 

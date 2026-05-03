@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../config/prisma';
 import { redisClient } from '../config/redis';
+import { requireAuth } from '../middleware/requireAuth';
 
 const router = Router();
 
@@ -64,10 +65,16 @@ router.get('/admin/metrics', async (req, res) => {
 });
 
 // GET orders for a specific user
-router.get('/:userId', async (req, res) => {
+router.get('/:userId', requireAuth, async (req, res) => {
     try {
+        const userId = req.params.userId;
+        const currentUserId = String((req as any).user.sub);
+
+        if (userId !== currentUserId) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
         const orders = await prisma.order.findMany({
-            where: { userId: req.params.userId },
+            where: { userId: req.params.userId as string },
             include: { items: { include: { product: true } } },
             orderBy: { createdAt: 'desc' }
         });
@@ -78,8 +85,9 @@ router.get('/:userId', async (req, res) => {
 });
 
 // POST create order (add to cart / PENDING)
-router.post('/', async (req, res) => {
-    const { userId, totalAmount, products } = req.body;
+router.post('/', requireAuth, async (req, res) => {
+    const { totalAmount, products } = req.body;
+    const userId = String((req as any).user.sub);
 
     try {
         // Validate all product IDs exist
@@ -107,9 +115,9 @@ router.post('/', async (req, res) => {
 });
 
 // DELETE single order (and refund stock)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAuth, async (req, res) => {
     try {
-        const orderId = parseInt(req.params.id);
+        const orderId = parseInt(req.params.id as string);
         if (isNaN(orderId)) return res.status(400).json({ message: 'Invalid order ID' });
 
         const order = await prisma.order.findUnique({
@@ -117,6 +125,10 @@ router.delete('/:id', async (req, res) => {
             include: { items: true }
         });
         if (!order) return res.status(404).json({ message: 'Order not found' });
+
+        if (order.userId !== String((req as any).user.sub)) {
+            return res.status(403).json({ message: 'Forbidden: You do not own this order' });
+        }
 
         // Refund stock ONLY if the order was completed (since pending orders don't decrement stock)
         if (order.status === 'COMPLETED') {
@@ -139,9 +151,12 @@ router.delete('/:id', async (req, res) => {
 });
 
 // DELETE all orders for a user (and refund stock)
-router.delete('/all/:userId', async (req, res) => {
+router.delete('/all/:userId', requireAuth, async (req, res) => {
     try {
-        const { userId } = req.params;
+        const userId = req.params.userId as string;
+        if (userId !== String((req as any).user.sub)) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
         const orders = await prisma.order.findMany({
             where: { userId },
             include: { items: true }
@@ -173,9 +188,9 @@ router.delete('/all/:userId', async (req, res) => {
 });
 
 // POST finalize purchase (checkout / COMPLETED)
-router.post('/:id/buy', async (req, res) => {
+router.post('/:id/buy', requireAuth, async (req, res) => {
     try {
-        const orderId = parseInt(req.params.id);
+        const orderId = parseInt(req.params.id as string);
         if (isNaN(orderId)) return res.status(400).json({ message: 'Invalid order ID' });
 
         const order = await prisma.order.findUnique({
@@ -184,11 +199,25 @@ router.post('/:id/buy', async (req, res) => {
         });
         if (!order) return res.status(404).json({ message: 'Order not found' });
 
+        if (order.userId !== String((req as any).user.sub)) {
+            return res.status(403).json({ message: 'Forbidden: You do not own this order' });
+        }
+
         if (order.status === 'COMPLETED') {
             return res.status(400).json({ message: 'Order is already completed' });
         }
 
-        // Decrement stock for each item
+        // Verify stock and decrement for each item
+        for (const item of order.items) {
+            const product = await prisma.product.findUnique({ where: { id: item.productId } });
+            if (!product) {
+                return res.status(400).json({ message: `Product ${item.productId} not found` });
+            }
+            if (product.stock < item.quantity) {
+                return res.status(400).json({ message: `Insufficient stock for product ${product.name}` });
+            }
+        }
+
         for (const item of order.items) {
             await prisma.product.update({
                 where: { id: item.productId },

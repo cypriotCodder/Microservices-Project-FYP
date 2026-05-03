@@ -68,6 +68,18 @@ export const consumeOrderBoughtEvents = async () => {
         // 2. Loop through the products in the order
         if (eventData.products && Array.isArray(eventData.products)) {
           for (const item of eventData.products) {
+            // Verify stock BEFORE decrementing
+            const product = await Product.findById(item.productId);
+            if (!product) {
+              console.warn(`Product not found: ${item.productId}. Skipping.`);
+              continue;
+            }
+            if (product.stock < item.quantity) {
+              console.warn(`Insufficient stock for product ${item.productId}. Needed: ${item.quantity}, Available: ${product.stock}. Skipping decrement.`);
+              // Note: Ideally we'd send an ORDER_FAILED event back here to cancel the order.
+              continue;
+            }
+
             // 3. Decrement the stock count in the MongoDB database
             await Product.updateOne(
               { _id: item.productId },

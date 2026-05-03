@@ -12,7 +12,22 @@ The dissertation compares how the underlying architectural design affects **Perf
 
 ---
 
-## 2. System 1: The Monolithic Architecture
+## 2. Technology Stack
+
+This project leverages a modern, full-stack, cloud-native ecosystem:
+*   **Languages & Frameworks:** TypeScript, Node.js, Express.js, React.js (Vite)
+*   **Relational Database & ORM:** PostgreSQL, Prisma ORM
+*   **NoSQL Database:** MongoDB, Mongoose
+*   **Caching & Message Broker:** Redis, RabbitMQ
+*   **Observability & Tracing:** OpenTelemetry, Jaeger UI
+*   **Load Testing & Metrics:** k6, InfluxDB, Grafana
+*   **Containerization & Orchestration:** Docker, Docker Compose
+*   **External Integrations:** Groq Cloud API (Llama-3 model)
+*   **Chaos Engineering:** Pumba (Network Emulation)
+
+---
+
+## 3. System 1: The Monolithic Architecture
 
 The Monolith represents traditional, tightly-coupled software design where all business logic runs in a single process.
 
@@ -27,7 +42,7 @@ Because everything shares a single Postgres Connection Pool (maximum 100 connect
 
 ---
 
-## 3. System 2: The Distributed Microservices Architecture
+## 4. System 2: The Distributed Microservices Architecture
 
 The Microservices system breaks the e-commerce platform down into isolated, independent, and specialized services.
 
@@ -51,7 +66,7 @@ The Microservices system breaks the e-commerce platform down into isolated, inde
 
 ---
 
-## 4. The Testing Framework
+## 5. The Testing Framework
 
 To scientifically compare these two architectures, we utilize a highly deterministic, probabilistic testing methodology.
 

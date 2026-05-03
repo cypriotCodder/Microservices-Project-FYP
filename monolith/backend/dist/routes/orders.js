@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prisma_1 = require("../config/prisma");
 const redis_1 = require("../config/redis");
+const requireAuth_1 = require("../middleware/requireAuth");
 const router = (0, express_1.Router)();
 router.get('/health', (req, res) => {
     res.json({ status: 'Order Module is running' });
@@ -19,6 +20,10 @@ router.get('/health', (req, res) => {
 // GET admin order metrics
 router.get('/admin/metrics', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const cachedMetrics = yield redis_1.redisClient.get('admin:metrics');
+        if (cachedMetrics) {
+            return res.json(JSON.parse(cachedMetrics));
+        }
         const totalOrders = yield prisma_1.prisma.order.count();
         const revenueAgg = yield prisma_1.prisma.order.aggregate({ _sum: { totalAmount: true } });
         const totalRevenue = revenueAgg._sum.totalAmount || 0;
@@ -49,15 +54,22 @@ router.get('/admin/metrics', (req, res) => __awaiter(void 0, void 0, void 0, fun
             GROUP BY DATE_TRUNC('minute', "createdAt")
             ORDER BY "_id" ASC
         `;
-        res.json({ totalOrders, totalRevenue, topProducts, ordersPerMinute });
+        const payload = { totalOrders, totalRevenue, topProducts, ordersPerMinute };
+        yield redis_1.redisClient.setEx('admin:metrics', 15, JSON.stringify(payload));
+        res.json(payload);
     }
     catch (error) {
         res.status(500).json({ error: 'Failed to fetch admin order metrics' });
     }
 }));
 // GET orders for a specific user
-router.get('/:userId', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/:userId', requireAuth_1.requireAuth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const userId = req.params.userId;
+        const currentUserId = String(req.user.sub);
+        if (userId !== currentUserId) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
         const orders = yield prisma_1.prisma.order.findMany({
             where: { userId: req.params.userId },
             include: { items: { include: { product: true } } },
@@ -70,8 +82,9 @@ router.get('/:userId', (req, res) => __awaiter(void 0, void 0, void 0, function*
     }
 }));
 // POST create order (add to cart / PENDING)
-router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { userId, totalAmount, products } = req.body;
+router.post('/', requireAuth_1.requireAuth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { totalAmount, products } = req.body;
+    const userId = String(req.user.sub);
     try {
         // Validate all product IDs exist
         const productIds = products.map((p) => parseInt(p.productId));
@@ -96,7 +109,7 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     }
 }));
 // DELETE single order (and refund stock)
-router.delete('/:id', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.delete('/:id', requireAuth_1.requireAuth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const orderId = parseInt(req.params.id);
         if (isNaN(orderId))
@@ -107,15 +120,20 @@ router.delete('/:id', (req, res) => __awaiter(void 0, void 0, void 0, function* 
         });
         if (!order)
             return res.status(404).json({ message: 'Order not found' });
-        // Refund stock for each item
-        for (const item of order.items) {
-            yield prisma_1.prisma.product.update({
-                where: { id: item.productId },
-                data: { stock: { increment: item.quantity } }
-            });
-            yield redis_1.redisClient.del(`product:${item.productId}`);
+        if (order.userId !== String(req.user.sub)) {
+            return res.status(403).json({ message: 'Forbidden: You do not own this order' });
         }
-        yield redis_1.redisClient.del('products:all');
+        // Refund stock ONLY if the order was completed (since pending orders don't decrement stock)
+        if (order.status === 'COMPLETED') {
+            for (const item of order.items) {
+                yield prisma_1.prisma.product.update({
+                    where: { id: item.productId },
+                    data: { stock: { increment: item.quantity } }
+                });
+                yield redis_1.redisClient.del(`product:${item.productId}`);
+            }
+            yield redis_1.redisClient.del('products:all');
+        }
         yield prisma_1.prisma.order.delete({ where: { id: orderId } }); // cascade deletes OrderItems
         res.status(200).json({ message: 'Order deleted and stock refunded' });
     }
@@ -124,22 +142,27 @@ router.delete('/:id', (req, res) => __awaiter(void 0, void 0, void 0, function* 
     }
 }));
 // DELETE all orders for a user (and refund stock)
-router.delete('/all/:userId', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.delete('/all/:userId', requireAuth_1.requireAuth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { userId } = req.params;
+        const userId = req.params.userId;
+        if (userId !== String(req.user.sub)) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
         const orders = yield prisma_1.prisma.order.findMany({
             where: { userId },
             include: { items: true }
         });
         let stockRefunded = false;
         for (const order of orders) {
-            for (const item of order.items) {
-                yield prisma_1.prisma.product.update({
-                    where: { id: item.productId },
-                    data: { stock: { increment: item.quantity } }
-                });
-                yield redis_1.redisClient.del(`product:${item.productId}`);
-                stockRefunded = true;
+            if (order.status === 'COMPLETED') {
+                for (const item of order.items) {
+                    yield prisma_1.prisma.product.update({
+                        where: { id: item.productId },
+                        data: { stock: { increment: item.quantity } }
+                    });
+                    yield redis_1.redisClient.del(`product:${item.productId}`);
+                    stockRefunded = true;
+                }
             }
         }
         if (stockRefunded) {
@@ -153,7 +176,7 @@ router.delete('/all/:userId', (req, res) => __awaiter(void 0, void 0, void 0, fu
     }
 }));
 // POST finalize purchase (checkout / COMPLETED)
-router.post('/:id/buy', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.post('/:id/buy', requireAuth_1.requireAuth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const orderId = parseInt(req.params.id);
         if (isNaN(orderId))
@@ -164,10 +187,22 @@ router.post('/:id/buy', (req, res) => __awaiter(void 0, void 0, void 0, function
         });
         if (!order)
             return res.status(404).json({ message: 'Order not found' });
+        if (order.userId !== String(req.user.sub)) {
+            return res.status(403).json({ message: 'Forbidden: You do not own this order' });
+        }
         if (order.status === 'COMPLETED') {
             return res.status(400).json({ message: 'Order is already completed' });
         }
-        // Decrement stock for each item
+        // Verify stock and decrement for each item
+        for (const item of order.items) {
+            const product = yield prisma_1.prisma.product.findUnique({ where: { id: item.productId } });
+            if (!product) {
+                return res.status(400).json({ message: `Product ${item.productId} not found` });
+            }
+            if (product.stock < item.quantity) {
+                return res.status(400).json({ message: `Insufficient stock for product ${product.name}` });
+            }
+        }
         for (const item of order.items) {
             yield prisma_1.prisma.product.update({
                 where: { id: item.productId },

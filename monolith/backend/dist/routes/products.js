@@ -16,19 +16,70 @@ const router = (0, express_1.Router)();
 router.get('/health', (req, res) => {
     res.json({ status: 'Product Module is running' });
 });
-// GET all products (with Redis cache)
+// GET all products (paginated and filtered)
 router.get('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const cachedProducts = yield redis_1.redisClient.get('products:all');
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 50;
+        const category = req.query.category || "All";
+        const sort = req.query.sort || "";
+        // Predictable 60s cache block mimicking microservices flow
+        const cacheKey = `products:page:${page}:limit:${limit}:cat:${category}:sort:${sort}`;
+        const cachedProducts = yield redis_1.redisClient.get(cacheKey);
         if (cachedProducts) {
             return res.json(JSON.parse(cachedProducts));
         }
-        const products = yield prisma_1.prisma.product.findMany({ orderBy: { createdAt: 'desc' } });
-        yield redis_1.redisClient.setEx('products:all', 3600, JSON.stringify(products));
-        res.json(products);
+        let whereClause = {};
+        if (category !== "All") {
+            whereClause.category = category;
+        }
+        let orderByClause = { createdAt: 'desc' };
+        if (sort === 'price-asc')
+            orderByClause = { price: 'asc' };
+        if (sort === 'price-desc')
+            orderByClause = { price: 'desc' };
+        if (sort === 'name-asc')
+            orderByClause = { name: 'asc' };
+        if (sort === 'name-desc')
+            orderByClause = { name: 'desc' };
+        const skip = (page - 1) * limit;
+        const [products, total] = yield Promise.all([
+            prisma_1.prisma.product.findMany({
+                where: whereClause,
+                select: {
+                    id: true,
+                    name: true,
+                    price: true,
+                    stock: true,
+                    image: true,
+                    category: true
+                },
+                orderBy: orderByClause,
+                skip: skip,
+                take: limit
+            }),
+            prisma_1.prisma.product.count({ where: whereClause })
+        ]);
+        const responseData = { products, total, page, totalPages: Math.ceil(total / limit) };
+        yield redis_1.redisClient.setEx(cacheKey, 60, JSON.stringify(responseData));
+        res.json(responseData);
     }
     catch (error) {
         res.status(500).json({ message: 'Error fetching products', error });
+    }
+}));
+// Lightweight read probe — bypasses Redis, hits Postgres directly.
+// Used by k6 PingDB iterations to measure raw DB latency and make
+// connection pool exhaustion visible as a latency spike at ~200 VUs.
+// Must be declared BEFORE /:id to avoid Express param conflict.
+router.get('/ping', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const start = Date.now();
+    try {
+        yield prisma_1.prisma.product.findFirst({});
+        res.json({ ok: true, dbLatency: Date.now() - start });
+    }
+    catch (e) {
+        res.status(500).json({ ok: false, error: String(e) });
     }
 }));
 // GET single product by ID
@@ -137,7 +188,7 @@ router.post('/:productId/comments', (req, res) => __awaiter(void 0, void 0, void
             return res.status(400).json({ message: 'Invalid product ID' });
         const { userId, content } = req.body;
         const comment = yield prisma_1.prisma.comment.create({
-            data: { productId, userId, content }
+            data: { productId, userId: String(userId), content }
         });
         res.status(201).json({ message: 'Comment created', comment });
     }

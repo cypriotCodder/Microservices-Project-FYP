@@ -57,13 +57,16 @@ export class CircuitBreaker {
 }
 
 // Factory to create a proxy wrapped in a circuit breaker
-export const createCircuitBreakerProxy = (proxyOptions: Options) => {
+export const createCircuitBreakerProxy = (proxyOptions: Options, fallbackHandler?: (req: Request, res: Response) => void) => {
     const breaker = new CircuitBreaker();
 
     // The middleware that intercepts before proxying
     const breakerMiddleware = (req: Request, res: Response, next: NextFunction) => {
         const state = breaker.checkState();
         if (state === BreakerState.OPEN) {
+            if (fallbackHandler) {
+                return fallbackHandler(req, res);
+            }
             return res.status(503).json({ 
                 error: 'Service Unavailable', 
                 message: 'Circuit breaker is OPEN. The downstream service is currently unreachable.' 
@@ -81,7 +84,10 @@ export const createCircuitBreakerProxy = (proxyOptions: Options) => {
                 breaker.recordFailure();
                 console.error(`[Proxy Error] ${err.message}. Failure count: ${(breaker as any).failureCount}`);
                 if (res instanceof ServerResponse && !res.headersSent) {
-                   (res as Response).status(502).json({ error: 'Bad Gateway', message: 'The downstream service failed or timed out.' });
+                    if (fallbackHandler) {
+                        return fallbackHandler(req as Request, res as Response);
+                    }
+                    (res as Response).status(502).json({ error: 'Bad Gateway', message: 'The downstream service failed or timed out.' });
                 }
             },
             proxyRes: (proxyRes, req, res) => {

@@ -11,8 +11,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.seedProducts = void 0;
 const prisma_1 = require("../config/prisma");
+const redis_1 = require("../config/redis");
 const seedProducts = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        // 0. Flush all product-related Redis keys BEFORE touching Postgres.
+        //    Without this, the frontend would receive cached products with stale IDs
+        //    after the seed deletes and re-inserts with new auto-increment IDs,
+        //    causing FK constraint failures when users try to post comments.
+        yield redis_1.redisClient.del('products:all');
+        const individualKeys = yield redis_1.redisClient.keys('product:*');
+        if (individualKeys.length > 0)
+            yield redis_1.redisClient.del(individualKeys);
         // 1. Clear existing data (clean slate for the test)
         yield prisma_1.prisma.review.deleteMany({});
         yield prisma_1.prisma.orderItem.deleteMany({});

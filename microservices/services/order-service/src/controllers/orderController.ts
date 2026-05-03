@@ -4,8 +4,13 @@ import { getChannel } from "../utils/messageBroker"; // Importing the tool we ju
 
 export const createOrder = async (req: Request, res: Response) => {
   // 1. Get data from the user
-  const { products, userId, totalAmount } = req.body;
-  // Expecting body like: { userId: "123", totalAmount: 100, products: [{ productId: "abc", quantity: 1 }] }
+  const { products, totalAmount } = req.body;
+  const userId = req.headers['x-user-id'] as string;
+  // Expecting body like: { totalAmount: 100, products: [{ productId: "abc", quantity: 1 }] }
+
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
 
   try {
     // 2. Save Order to DB (Initially PENDING)
@@ -36,6 +41,12 @@ export const createOrder = async (req: Request, res: Response) => {
 
 export const getOrders = async (req: Request, res: Response) => {
   const userId = req.params.userId;
+  const currentUserId = req.headers['x-user-id'] as string;
+
+  if (userId !== currentUserId) {
+    return res.status(403).json({ error: "Forbidden: Cannot fetch orders for another user" });
+  }
+
   try {
     const orders = await Order.find({ userId }).sort({ createdAt: -1 });
     res.status(200).json(orders);
@@ -47,12 +58,17 @@ export const getOrders = async (req: Request, res: Response) => {
 
 export const deleteOrder = async (req: Request, res: Response) => {
   const orderId = req.params.id;
+  const currentUserId = req.headers['x-user-id'] as string;
 
   try {
     const order = await Order.findById(orderId);
 
     if (!order) {
       return res.status(404).json({ error: "Order not found" });
+    }
+
+    if (order.userId !== currentUserId) {
+      return res.status(403).json({ error: "Forbidden: You do not own this order" });
     }
 
     // Send Event to RabbitMQ fully refunding stock ONLY if the order was completed
@@ -84,6 +100,11 @@ export const deleteOrder = async (req: Request, res: Response) => {
 
 export const deleteAllOrders = async (req: Request, res: Response) => {
   const userId = req.params.userId;
+  const currentUserId = req.headers['x-user-id'] as string;
+
+  if (userId !== currentUserId) {
+    return res.status(403).json({ error: "Forbidden: Cannot delete orders for another user" });
+  }
 
   try {
     const orders = await Order.find({ userId });
@@ -160,12 +181,17 @@ export const getAdminMetrics = async (req: Request, res: Response) => {
 
 export const buyOrder = async (req: Request, res: Response) => {
   const orderId = req.params.id;
+  const currentUserId = req.headers['x-user-id'] as string;
 
   try {
     const order = await Order.findById(orderId);
 
     if (!order) {
       return res.status(404).json({ error: "Order not found" });
+    }
+
+    if (order.userId !== currentUserId) {
+      return res.status(403).json({ error: "Forbidden: You do not own this order" });
     }
 
     if (order.status === 'COMPLETED') {

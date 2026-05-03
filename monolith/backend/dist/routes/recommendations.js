@@ -47,8 +47,10 @@ router.post('/click', (req, res) => __awaiter(void 0, void 0, void 0, function* 
     // Endpoint to track user clicks/views on products
     const { userId, productId } = req.body;
     try {
+        const uid = String(userId);
+        const pid = String(productId);
         const existingRec = yield prisma_1.prisma.recommendation.findFirst({
-            where: { userId, productId }
+            where: { userId: uid, productId: pid }
         });
         if (existingRec) {
             // Increment score by 1 for an additional click/view
@@ -61,7 +63,7 @@ router.post('/click', (req, res) => __awaiter(void 0, void 0, void 0, function* 
         else {
             // New interaction gets a score of 1
             const newRec = yield prisma_1.prisma.recommendation.create({
-                data: { userId, productId, score: 1 }
+                data: { userId: uid, productId: pid, score: 1 }
             });
             return res.status(201).json(newRec);
         }
@@ -76,7 +78,7 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { userId, productId, score } = req.body;
     try {
         const rec = yield prisma_1.prisma.recommendation.create({
-            data: { userId, productId, score }
+            data: { userId: String(userId), productId: String(productId), score }
         });
         res.status(201).json(rec);
     }

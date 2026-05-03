@@ -10,10 +10,12 @@ interface OrderProduct {
 }
 
 interface Order {
-    _id: string;
+    _id?: string;
+    id?: number;
     totalAmount: number;
     status: string;
-    products: OrderProduct[];
+    products?: OrderProduct[];
+    items?: any[];
     createdAt: string;
 }
 
@@ -33,7 +35,10 @@ export function Orders() {
                 
                 // Fetch product names dynamically for the UI cache
                 const productIds = new Set<string>();
-                fetchedOrders.forEach((o: Order) => o.products?.forEach((p: OrderProduct) => productIds.add(p.productId)));
+                fetchedOrders.forEach((o: Order) => {
+                    const itemsList = o.products || o.items || [];
+                    itemsList.forEach((p: any) => productIds.add(String(p.productId)));
+                });
                 
                 const newCache: Record<string, string> = {};
                 await Promise.all(Array.from(productIds).map(async (id) => {
@@ -54,7 +59,7 @@ export function Orders() {
         try {
             await fetchFromAPI(`/orders/${orderId}/buy`, { method: 'POST' });
             setOrders(prevOrders => prevOrders.map(o => 
-                o._id === orderId ? { ...o, status: 'COMPLETED' } : o
+                getOrderId(o) === orderId ? { ...o, status: 'COMPLETED' } : o
             ));
             alert('Purchase successful! Items have been removed from the database.');
         } catch (err) {
@@ -63,11 +68,13 @@ export function Orders() {
         }
     };
 
+    const getOrderId = (order: Order): string => String(order._id || order.id || '');
+
     const handleDelete = async (orderId: string) => {
         if (!confirm('Are you sure you want to cancel this order? It will be removed and stock will be refunded.')) return;
         try {
             await fetchFromAPI(`/orders/${orderId}`, { method: 'DELETE' });
-            setOrders(prevOrders => prevOrders.filter(o => o._id !== orderId));
+            setOrders(prevOrders => prevOrders.filter(o => getOrderId(o) !== orderId));
             alert('Order cancelled successfully!');
         } catch (err) {
             console.error('Failed to delete order', err);
@@ -130,17 +137,19 @@ export function Orders() {
                             </tr>
                         </thead>
                         <tbody>
-                            {orders.map((order) => (
-                                <tr key={order._id} style={{ borderTop: '1px solid var(--border-color)' }}>
-                                    <td style={{ padding: '1rem' }}>#{order._id ? order._id.substring(0, 8) : 'N/A'}</td>
+                            {orders.map((order) => {
+                                const oid = getOrderId(order);
+                                return (
+                                <tr key={oid} style={{ borderTop: '1px solid var(--border-color)' }}>
+                                    <td style={{ padding: '1rem' }}>#{oid ? String(oid).substring(0, 8) : 'N/A'}</td>
                                     <td style={{ padding: '1rem' }}>{new Date(order.createdAt).toLocaleDateString()}</td>
                                     <td style={{ padding: '1rem' }}>${order.totalAmount}</td>
                                     <td style={{ padding: '1rem' }}>
-                                        {order.products?.map((p: OrderProduct, idx: number) => (
+                                        {(order.products || order.items || []).map((p: any, idx: number) => (
                                             <div key={idx} style={{ marginBottom: '0.25rem' }}>
                                                 <span style={{ color: 'var(--text-secondary)', marginRight: '0.25rem' }}>{p.quantity}x</span>
                                                 <Link to={`/product/${p.productId}`} style={{ color: 'var(--accent-color)', textDecoration: 'none', fontWeight: '500' }} onMouseOver={(e) => e.currentTarget.style.textDecoration = 'underline'} onMouseOut={(e) => e.currentTarget.style.textDecoration = 'none'}>
-                                                    {productCache[p.productId] || 'Loading...'}
+                                                    {productCache[String(p.productId)] || p.product?.name || 'Loading...'}
                                                 </Link>
                                             </div>
                                         ))}
@@ -158,7 +167,7 @@ export function Orders() {
                                     </td>
                                     <td style={{ padding: '1rem', display: 'flex', gap: '0.5rem' }}>
                                         <button
-                                            onClick={() => handleDelete(order._id)}
+                                            onClick={() => handleDelete(oid)}
                                             style={{
                                                 backgroundColor: 'rgba(244, 67, 54, 0.1)',
                                                 color: '#f44336',
@@ -176,7 +185,7 @@ export function Orders() {
 
                                         {(order.status === 'PENDING' || order.status === 'pending') && (
                                             <button
-                                                onClick={() => handleBuy(order._id)}
+                                                onClick={() => handleBuy(oid)}
                                                 style={{
                                                     backgroundColor: 'rgba(16, 185, 129, 0.1)',
                                                     color: '#10b981',
@@ -195,7 +204,8 @@ export function Orders() {
                                         )}
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                             {orders.length === 0 && (
                                 <tr>
                                     <td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>

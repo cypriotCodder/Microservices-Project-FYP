@@ -33,7 +33,10 @@ export function Orders() {
                 
                 // Fetch product names dynamically for the UI cache
                 const productIds = new Set<string>();
-                fetchedOrders.forEach((o: Order) => o.products?.forEach((p: OrderProduct) => productIds.add(p.productId)));
+                fetchedOrders.forEach((o: Order) => {
+                    const itemsList = o.products || (o as any).items || [];
+                    itemsList.forEach((p: OrderProduct) => productIds.add(p.productId.toString()));
+                });
                 
                 const newCache: Record<string, string> = {};
                 await Promise.all(Array.from(productIds).map(async (id) => {
@@ -136,11 +139,11 @@ export function Orders() {
                                     <td style={{ padding: '1rem' }}>{new Date(order.createdAt).toLocaleDateString()}</td>
                                     <td style={{ padding: '1rem' }}>${order.totalAmount}</td>
                                     <td style={{ padding: '1rem' }}>
-                                        {order.products?.map((p: OrderProduct, idx: number) => (
+                                        {(order.products || (order as any).items || []).map((p: OrderProduct, idx: number) => (
                                             <div key={idx} style={{ marginBottom: '0.25rem' }}>
                                                 <span style={{ color: 'var(--text-secondary)', marginRight: '0.25rem' }}>{p.quantity}x</span>
                                                 <Link to={`/product/${p.productId}`} style={{ color: 'var(--accent-color)', textDecoration: 'none', fontWeight: '500' }} onMouseOver={(e) => e.currentTarget.style.textDecoration = 'underline'} onMouseOut={(e) => e.currentTarget.style.textDecoration = 'none'}>
-                                                    {productCache[p.productId] || 'Loading...'}
+                                                    {productCache[p.productId.toString()] || 'Loading...'}
                                                 </Link>
                                             </div>
                                         ))}

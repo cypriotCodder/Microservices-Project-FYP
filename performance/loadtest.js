@@ -16,11 +16,11 @@ const VU_PASSWORD = 'password123';
 
 export const options = {
     stages: [
-        { duration: '30s', target: 25  },  // warm up
-        { duration: '60s', target: 50  },  // moderate
-        { duration: '60s', target: 100 },  // stress
-        { duration: '60s', target: 200 },  // connection pool zone
-        { duration: '60s', target: 300 },  // peak (failure curve)
+        { duration: '30s', target: 50  },  // warm up
+        { duration: '60s', target: 200 },  // moderate
+        { duration: '60s', target: 500 },  // connection pool zone
+        { duration: '60s', target: 800 },  // intense stress
+        { duration: '60s', target: 1000 }, // peak (extreme failure curve)
         { duration: '30s', target: 0   },  // cool down
     ],
     thresholds: {
