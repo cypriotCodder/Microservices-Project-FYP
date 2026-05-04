@@ -305,3 +305,29 @@ else
     echo -e "  ${RED}${BOLD}⚠️  $FAIL TEST(S) FAILED${NC}"
 fi
 echo ""
+
+# ─────────────────────────────────────────────────
+# CLEANUP — delete test-generated comments
+# ─────────────────────────────────────────────────
+echo -e "${BOLD}${CYAN}═══════════════════════════════════════${NC}"
+echo -e "${BOLD}${CYAN}  CLEANUP${NC}"
+echo -e "${BOLD}${CYAN}═══════════════════════════════════════${NC}"
+
+RESP=$(curl -s -w "\n%{http_code}" -X DELETE $MONO_URL/products/comments/k6)
+CODE=$(echo "$RESP" | tail -1)
+BODY=$(echo "$RESP" | sed '$d')
+if [ "$CODE" == "200" ]; then
+    echo -e "  ${GREEN}✅ Monolith:      $BODY${NC}"
+else
+    echo -e "  ${RED}❌ Monolith cleanup failed [$CODE]: $BODY${NC}"
+fi
+
+RESP=$(curl -s -w "\n%{http_code}" -X DELETE $MICRO_URL/products/comments/k6)
+CODE=$(echo "$RESP" | tail -1)
+BODY=$(echo "$RESP" | sed '$d')
+if [ "$CODE" == "200" ]; then
+    echo -e "  ${GREEN}✅ Microservices: $BODY${NC}"
+else
+    echo -e "  ${RED}❌ Microservices cleanup failed [$CODE]: $BODY${NC}"
+fi
+echo ""

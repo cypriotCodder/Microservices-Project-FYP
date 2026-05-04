@@ -191,4 +191,19 @@ router.post('/:productId/comments', async (req, res) => {
     }
 });
 
+// DELETE all k6 load-test comments (content starts with "k6 ")
+// Called by the k6 teardown() after every test run to keep the DB clean.
+// Only removes synthetic test data — real user comments are untouched.
+router.delete('/comments/k6', async (req, res) => {
+    try {
+        const result = await prisma.comment.deleteMany({
+            where: { content: { startsWith: 'k6 ' } }
+        });
+        console.log(`[cleanup] Deleted ${result.count} k6 test comments`);
+        res.json({ message: `Deleted ${result.count} k6 test comments` });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to delete k6 comments', error });
+    }
+});
+
 export default router;

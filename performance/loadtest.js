@@ -230,3 +230,23 @@ export default function (data) {
     sleep(0.1);
 }
 
+// ─── teardown() runs ONCE after all VUs finish ────────────────────────────────
+// Deletes only k6-generated comments (content starts with "k6 ").
+// Products, orders, and real user data are left completely untouched.
+export function teardown(data) {
+    const { TARGET, arch } = data;
+
+    console.log(`[teardown] arch=${arch} — deleting k6 test comments from ${TARGET}...`);
+
+    const res = http.del(
+        `${TARGET}/products/comments/k6`,
+        null,
+        { timeout: '60s' }
+    );
+
+    if (res.status === 200) {
+        console.log(`[teardown] ✅ ${JSON.parse(res.body).message}`);
+    } else {
+        console.warn(`[teardown] ⚠️  Cleanup returned ${res.status}: ${res.body}`);
+    }
+}

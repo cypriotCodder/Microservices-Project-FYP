@@ -14,6 +14,12 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction):
         return next();
     }
 
+    // Exempt k6 test-data cleanup endpoint (no user context needed — internal use only)
+    // Note: when mounted under app.use('/products', ...), req.path is the sub-path /comments/k6
+    if ((req.path === '/comments/k6' || req.path === '/products/comments/k6') && req.method === 'DELETE') {
+        return next();
+    }
+
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         if (req.method === 'GET') {

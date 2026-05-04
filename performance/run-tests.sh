@@ -134,3 +134,30 @@ echo "Restarting stopped services..."
 (cd "$MICROSERVICES_DIR" && docker compose up -d 2>&1 | tail -3)
 (cd "$MONOLITH_DIR" && docker compose up -d monolith-backend 2>&1 | tail -3)
 echo "  Done."
+echo ""
+
+# ─── CLEANUP — delete k6 test comments ───────────────────────────────────────
+# Runs after both test runs complete. Deletes only comments whose content
+# starts with "k6 " — products, orders, and real user data are untouched.
+# Both endpoints are unauthenticated so this never silently fails.
+echo "Cleaning up k6 test comments..."
+
+# Wait briefly for containers to be fully ready after restart
+sleep 5
+
+MONO_CLEAN=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE http://localhost:4000/products/comments/k6)
+MONO_MSG=$(curl -s -X DELETE http://localhost:4000/products/comments/k6)
+if [ "$MONO_CLEAN" == "200" ]; then
+    echo "  ✅ Monolith:      $MONO_MSG"
+else
+    echo "  ❌ Monolith cleanup failed [HTTP $MONO_CLEAN]: $MONO_MSG"
+fi
+
+MICRO_CLEAN=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE http://localhost:8080/products/comments/k6)
+MICRO_MSG=$(curl -s -X DELETE http://localhost:8080/products/comments/k6)
+if [ "$MICRO_CLEAN" == "200" ]; then
+    echo "  ✅ Microservices: $MICRO_MSG"
+else
+    echo "  ❌ Microservices cleanup failed [HTTP $MICRO_CLEAN]: $MICRO_MSG"
+fi
+echo ""

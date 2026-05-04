@@ -165,6 +165,22 @@ app.get('/:productId/comments', async (req, res) => {
     }
 });
 
+// DELETE all k6 load-test comments (content starts with "k6 ")
+// Must be declared BEFORE /:productId to avoid Express treating "comments" as a productId.
+// Called by the k6 teardown() after every test run.
+app.delete('/comments/k6', async (req, res) => {
+    try {
+        const result = await Comment.deleteMany({ content: { $regex: /^k6 / } });
+        // Flush all cached comment lists — keys follow pattern product:<id>:comments:recent
+        const keys = await redisClient.keys('product:*:comments:recent');
+        if (keys.length > 0) await redisClient.del(keys);
+        console.log(`[cleanup] Deleted ${result.deletedCount} k6 test comments, flushed ${keys.length} Redis keys`);
+        res.json({ message: `Deleted ${result.deletedCount} k6 test comments` });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to delete k6 comments', error });
+    }
+});
+
 app.post('/seed', seedProducts);
 
 const startServer = async () => {
