@@ -6,11 +6,8 @@ services:
       - "4000:4000"
     env_file: ./backend/.env
     environment:
-      - DATABASE_URL=postgresql://postgres:8011nedimK216@postgres:5432/monolith_db?schema=public
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - postgres
-      - redis
+      - DATABASE_URL=postgresql://postgres.omzkmugaxusblmunctwp:8011nedimK216@aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres?schema=public
+      - REDIS_URL=rediss://default:gQAAAAAAAUofAAIgcDI4NTNjZTQ0MGUwMWU0OWQ1OWI0MjMzZDYwYTBjNDRiOQ@set-monster-84511.upstash.io:6379
     restart: on-failure
 
   monolith-client:
@@ -22,30 +19,3 @@ services:
     volumes:
       - ./client:/app
       - /app/node_modules
-
-  redis:
-    image: redis:7
-    ports:
-      - "6380:6379"
-    # Cap memory so Redis evicts LRU keys instead of OOM-crashing under load.
-    # 'save ""' disables RDB snapshots — the 129MB persisted comment dump
-    # was loading at startup and blowing the heap before any VU connected.
-    command: >
-      redis-server
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-      --save ""
-
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 8011nedimK216
-      POSTGRES_DB: monolith_db
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres_data_monolith:/var/lib/postgresql/data
-
-volumes:
-  postgres_data_monolith:
