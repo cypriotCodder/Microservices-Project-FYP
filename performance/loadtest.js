@@ -168,8 +168,8 @@ export default function (data) {
     // ── One supplementary request, chosen probabilistically ──────────────────
     const roll = Math.random();
 
-    if (roll < 0.10) {
-        // PublishProduct (10%) - Native write + full catalog cache invalidate
+    if (roll < 0.05) {
+        // PublishProduct (5%) - Native write + full catalog cache invalidate
         const prodPayload = JSON.stringify({
             name: `k6 Stress Product VU${__VU}`,
             price: 49.99,
@@ -180,8 +180,23 @@ export default function (data) {
         res = http.post(`${TARGET}/products`, prodPayload, p('PublishProduct'));
         check(res, { 'status is 201': r => r.status === 201 });
 
+    } else if (roll < 0.15) {
+        // PostReview (10%) — write with rating; tests review persistence path
+        const reviewPayload = JSON.stringify({
+            userId: vUserId,
+            title: `k6 review VU=${__VU}`,
+            content: `k6 stress review iter=${__ITER} — automated load test.`,
+            rating: randomIntBetween(1, 5)
+        });
+        res = http.post(
+            `${TARGET}/products/${randomProduct}/reviews`,
+            reviewPayload,
+            p('PostReview')
+        );
+        check(res, { 'review created (201)': r => r.status === 201 });
+
     } else if (roll < 0.25) {
-        // PingDB (15%) — raw DB latency probe, bypasses Redis
+        // PingDB (10%) — raw DB latency probe, bypasses Redis
         res = http.get(`${TARGET}/products/ping`, p('PingDB'));
         check(res, { 'ping ok': r => r.status === 200 });
 
