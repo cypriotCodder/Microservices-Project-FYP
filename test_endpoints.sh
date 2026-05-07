@@ -96,6 +96,25 @@ CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 check "GET /products/:id/reviews" "200" "$CODE" "$BODY"
 
+RESP=$(curl -s -w "\n%{http_code}" -X POST $MONO_URL/products/$MONO_PRODUCT_ID/reviews -H "Content-Type: application/json" -d '{"userId":"'"$MONO_USER_ID"'","title":"Test Review","content":"Automated test review","rating":4}')
+CODE=$(echo "$RESP" | tail -1)
+BODY=$(echo "$RESP" | sed '$d')
+check "POST /products/:id/reviews (create)" "201" "$CODE" "$BODY"
+MONO_REVIEW_ID=$(echo "$BODY" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r.get('review',r).get('id',''))" 2>/dev/null)
+echo -e "     ${CYAN}(Created review ID: $MONO_REVIEW_ID)${NC}"
+
+RESP=$(curl -s -w "\n%{http_code}" $MONO_URL/products/$MONO_PRODUCT_ID/reviews)
+CODE=$(echo "$RESP" | tail -1)
+BODY=$(echo "$RESP" | sed '$d')
+REVIEW_FOUND=$(echo "$BODY" | python3 -c "import sys,json; reviews=json.load(sys.stdin); print('yes' if any(r.get('title')=='Test Review' for r in reviews) else 'no')" 2>/dev/null)
+if [ "$REVIEW_FOUND" == "yes" ]; then
+    echo -e "  ${GREEN}✅ PASS${NC} [verified] GET /products/:id/reviews (new review visible)"
+    PASS=$((PASS + 1))
+else
+    echo -e "  ${RED}❌ FAIL${NC} [not found] GET /products/:id/reviews (new review missing)"
+    FAIL=$((FAIL + 1))
+fi
+
 RESP=$(curl -s -w "\n%{http_code}" $MONO_URL/products/$MONO_PRODUCT_ID/comments)
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
@@ -219,6 +238,25 @@ CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 check "GET /products/:id/reviews" "200" "$CODE" "$BODY"
 
+RESP=$(curl -s -w "\n%{http_code}" -X POST $MICRO_URL/products/$MICRO_PRODUCT_ID/reviews -H "Content-Type: application/json" -H "Authorization: Bearer $MICRO_TOKEN" -d '{"userId":"'"$MICRO_USER_ID"'","title":"Test Review","content":"Automated test review","rating":5}')
+CODE=$(echo "$RESP" | tail -1)
+BODY=$(echo "$RESP" | sed '$d')
+check "POST /products/:id/reviews (create)" "201" "$CODE" "$BODY"
+MICRO_REVIEW_ID=$(echo "$BODY" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r.get('review',r).get('_id',''))" 2>/dev/null)
+echo -e "     ${CYAN}(Created review ID: $MICRO_REVIEW_ID)${NC}"
+
+RESP=$(curl -s -w "\n%{http_code}" $MICRO_URL/products/$MICRO_PRODUCT_ID/reviews)
+CODE=$(echo "$RESP" | tail -1)
+BODY=$(echo "$RESP" | sed '$d')
+REVIEW_FOUND=$(echo "$BODY" | python3 -c "import sys,json; reviews=json.load(sys.stdin); print('yes' if any(r.get('title')=='Test Review' for r in reviews) else 'no')" 2>/dev/null)
+if [ "$REVIEW_FOUND" == "yes" ]; then
+    echo -e "  ${GREEN}✅ PASS${NC} [verified] GET /products/:id/reviews (new review visible)"
+    PASS=$((PASS + 1))
+else
+    echo -e "  ${RED}❌ FAIL${NC} [not found] GET /products/:id/reviews (new review missing)"
+    FAIL=$((FAIL + 1))
+fi
+
 RESP=$(curl -s -w "\n%{http_code}" $MICRO_URL/products/$MICRO_PRODUCT_ID/comments)
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
@@ -227,7 +265,7 @@ check "GET /products/:id/comments" "200" "$CODE" "$BODY"
 RESP=$(curl -s -w "\n%{http_code}" -X POST $MICRO_URL/products/$MICRO_PRODUCT_ID/comments -H "Content-Type: application/json" -H "Authorization: Bearer $MICRO_TOKEN" -d '{"userId":"'"$MICRO_USER_ID"'","content":"Test comment from API"}')
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
-check "POST /products/:id/comments" "201" "$CODE" "$BODY"
+check "POST /products/:id/comments (async via RabbitMQ)" "202" "$CODE" "$BODY"
 
 # ── Orders (requires auth via x-user-id) ──
 echo -e "\n${YELLOW}── Orders ──${NC}"
