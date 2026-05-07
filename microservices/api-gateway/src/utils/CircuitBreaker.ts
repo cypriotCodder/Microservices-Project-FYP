@@ -80,6 +80,19 @@ export const createCircuitBreakerProxy = (proxyOptions: Options, fallbackHandler
     const enhancedOptions: Options = {
         ...proxyOptions,
         on: {
+            proxyReq: (proxyReq, req) => {
+                // Re-attach the body that express.json() already parsed.
+                // OTel auto-instrumentation patches the http module and consumes the
+                // raw stream, so the proxy would forward an empty body without this.
+                const body = (req as Request).body;
+                if (body && Object.keys(body).length > 0) {
+                    const bodyStr = JSON.stringify(body);
+                    proxyReq.setHeader('Content-Type', 'application/json');
+                    proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyStr));
+                    proxyReq.write(bodyStr);
+                    proxyReq.end();
+                }
+            },
             error: (err, req, res) => {
                 breaker.recordFailure();
                 console.error(`[Proxy Error] ${err.message}. Failure count: ${(breaker as any).failureCount}`);
@@ -91,7 +104,7 @@ export const createCircuitBreakerProxy = (proxyOptions: Options, fallbackHandler
                 }
             },
             proxyRes: (proxyRes, req, res) => {
-                // Any successful proxy connection (even a 404/500 from the microservice app layer itself) 
+                // Any successful proxy connection (even a 404/500 from the microservice app layer itself)
                 // means the network TCP connection is healthy. We only break on network/timeout failures.
                 breaker.recordSuccess();
             }
