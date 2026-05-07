@@ -77,7 +77,7 @@ router.post('/generate-product', async (req, res) => {
 
     try {
         const product = await prisma.product.create({
-            data: { name, price, description, stock }
+            data: { name, price, description, stock, image: `https://via.placeholder.com/150?text=${encodeURIComponent(name)}`, category: 'Electronics' }
         });
         await redisClient.del('products:all');
         res.status(201).json({ message: 'Product created', data: product });

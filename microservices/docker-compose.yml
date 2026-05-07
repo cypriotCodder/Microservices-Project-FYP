@@ -18,6 +18,50 @@ services:
       - order-service
     restart: on-failure
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  mongo:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: examplepassword
+    volumes:
+      - mongodb_data:/data/db
+    # Cap WiredTiger cache so the Linux OOM killer doesn't terminate MongoDB
+    # under 300-VU load. Default is 50% of RAM which can exhaust all memory.
+    command: mongod --wiredTigerCacheSizeGB 0.5
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    # Cap memory so Redis evicts LRU keys instead of OOM-crashing under load.
+    # 'save ""' disables RDB snapshots — avoids loading a massive persisted
+    # comment dump at startup that consumes memory before any VU connects.
+    command: >
+      redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save ""
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 8011nedimK216
+      POSTGRES_DB: microservices_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   auth-service:
     build: ./services/auth-service
@@ -25,7 +69,7 @@ services:
       - "3001:3001"
     env_file: ./services/auth-service/.env
     environment:
-      - DATABASE_URL=postgresql://postgres.omzkmugaxusblmunctwp:8011nedimK216@aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres?schema=public
+      - DATABASE_URL=postgresql://postgres:8011nedimK216@postgres:5432/microservices_db?schema=public
 
   product-service:
     build: ./services/product-service
@@ -34,9 +78,8 @@ services:
     env_file: ./services/product-service/.env
     environment:
       - SERVICE_NAME=product-service
-      - REDIS_URL=rediss://default:gQAAAAAAAUofAAIgcDI4NTNjZTQ0MGUwMWU0OWQ1OWI0MjMzZDYwYTBjNDRiOQ@set-monster-84511.upstash.io:6379
-      - MONGO_URI=mongodb+srv://nedim:8011@fyp.aubab4u.mongodb.net/?appName=FYP
-      - RABBITMQ_URL=amqps://bdqiubqw:hXeeSv2jUFVIxRXvxYsUFSvBzJ4hx6Xr@seahorse.lmq.cloudamqp.com/bdqiubqw
+      - REDIS_URL=redis://redis:6379
+      - MONGO_URI=mongodb://root:examplepassword@mongo:27017/microservices_products?authSource=admin
     restart: on-failure
 
   order-service:
@@ -46,8 +89,7 @@ services:
     env_file: ./services/order-service/.env
     environment:
       - SERVICE_NAME=order-service
-      - MONGO_URI=mongodb+srv://nedim:8011@fyp.aubab4u.mongodb.net/?appName=FYP
-      - RABBITMQ_URL=amqps://bdqiubqw:hXeeSv2jUFVIxRXvxYsUFSvBzJ4hx6Xr@seahorse.lmq.cloudamqp.com/bdqiubqw
+      - MONGO_URI=mongodb://root:examplepassword@mongo:27017/microservices_orders?authSource=admin
     restart: on-failure
 
   recommendation-service:
@@ -56,7 +98,7 @@ services:
       - "3004:3004"
     env_file: ./services/recommendation-service/.env
     environment:
-      - DATABASE_URL=postgresql://postgres.omzkmugaxusblmunctwp:8011nedimK216@aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres?schema=public
+      - DATABASE_URL=postgresql://postgres:8011nedimK216@postgres:5432/microservices_db?schema=public
 
   traffic-service:
     build: ./services/traffic-service
@@ -96,6 +138,8 @@ services:
     image: telegraf:latest
     volumes:
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    depends_on:
+      - rabbitmq
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -114,3 +158,7 @@ services:
     environment:
       - COLLECTOR_OTLP_ENABLED=true
 
+volumes:
+  postgres_data:
+  mongodb_data:
+  rabbitmq_data:

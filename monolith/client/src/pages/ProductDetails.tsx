@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { fetchFromAPI } from '../api/client';
-import { Sparkles, PackageCheck, AlertCircle, MessageSquare, Send } from 'lucide-react';
+import { Sparkles, PackageCheck, AlertCircle, MessageSquare, Send, Star, ChevronDown, ChevronUp } from 'lucide-react';
 import '../styles/main.css';
 
 interface Product {
@@ -44,6 +44,15 @@ export default function ProductDetails() {
     const [commentText, setCommentText] = useState('');
     const [isSubmittingComment, setIsSubmittingComment] = useState(false);
     const [commentFeedback, setCommentFeedback] = useState<{ type: 'saved' | 'error'; msg: string } | null>(null);
+
+    // Review form state
+    const [showReviewForm, setShowReviewForm] = useState(false);
+    const [reviewTitle, setReviewTitle] = useState('');
+    const [reviewContent, setReviewContent] = useState('');
+    const [reviewRating, setReviewRating] = useState(0);
+    const [hoverRating, setHoverRating] = useState(0);
+    const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+    const [reviewFeedback, setReviewFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
     useEffect(() => {
         const fetchDetails = async () => {
@@ -96,6 +105,39 @@ export default function ProductDetails() {
             alert('Failed to summarize text: ' + err.message);
         } finally {
             setIsSummarizing(false);
+        }
+    };
+
+    const handleReview = async () => {
+        if (!reviewTitle.trim() || !reviewContent.trim() || reviewRating === 0 || !product) return;
+        setIsSubmittingReview(true);
+        setReviewFeedback(null);
+        try {
+            const userStr = localStorage.getItem('user');
+            const currentUser = userStr ? JSON.parse(userStr) : null;
+            const userId = currentUser?.userId || currentUser?.username || 'anonymous';
+
+            const response = await fetchFromAPI(`/products/${id}/reviews`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    userId: String(userId),
+                    title: reviewTitle.trim(),
+                    content: reviewContent.trim(),
+                    rating: reviewRating
+                })
+            });
+
+            const newReview = response.review || response.data || response;
+            setReviews(prev => [{ ...newReview, _id: newReview._id || newReview.id || Date.now().toString() }, ...prev]);
+            setReviewFeedback({ type: 'success', msg: '✓ Review posted successfully!' });
+            setReviewTitle('');
+            setReviewContent('');
+            setReviewRating(0);
+            setShowReviewForm(false);
+        } catch (e: any) {
+            setReviewFeedback({ type: 'error', msg: 'Failed to post review: ' + e.message });
+        } finally {
+            setIsSubmittingReview(false);
         }
     };
 
@@ -246,9 +288,171 @@ export default function ProductDetails() {
                         </div>
 
                         <div>
-                            <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-                                Customer Reviews ({reviews.length})
-                            </h3>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                                <h3 style={{ fontSize: '1.2rem', margin: 0 }}>
+                                    Customer Reviews ({reviews.length})
+                                </h3>
+                                <button
+                                    id="toggle-review-form"
+                                    onClick={() => { setShowReviewForm(!showReviewForm); setReviewFeedback(null); }}
+                                    style={{
+                                        background: 'rgba(251, 191, 36, 0.1)',
+                                        color: '#fbbf24',
+                                        border: '1px solid rgba(251, 191, 36, 0.4)',
+                                        padding: '0.4rem 0.8rem',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        fontSize: '0.85rem',
+                                        fontWeight: 600,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.3rem',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    <Star size={14} />
+                                    {showReviewForm ? 'Cancel' : 'Write a Review'}
+                                    {showReviewForm ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                </button>
+                            </div>
+
+                            {/* Review Feedback */}
+                            {reviewFeedback && (
+                                <div style={{
+                                    padding: '0.6rem 1rem',
+                                    marginBottom: '1rem',
+                                    borderRadius: '8px',
+                                    fontSize: '0.85rem',
+                                    fontWeight: 500,
+                                    border: reviewFeedback.type === 'success' ? '1px solid rgba(76,175,80,0.5)' : '1px solid rgba(244,67,54,0.5)',
+                                    background: reviewFeedback.type === 'success' ? 'rgba(76,175,80,0.1)' : 'rgba(244,67,54,0.1)',
+                                    color: reviewFeedback.type === 'success' ? '#4caf50' : '#f44336'
+                                }}>
+                                    {reviewFeedback.msg}
+                                </div>
+                            )}
+
+                            {/* Review Form */}
+                            {showReviewForm && (
+                                <div style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '0.75rem',
+                                    marginBottom: '1.5rem',
+                                    background: 'var(--card-bg)',
+                                    padding: '1.25rem',
+                                    borderRadius: '10px',
+                                    border: '1px solid rgba(251, 191, 36, 0.25)',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                                }}>
+                                    {/* Star Rating */}
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Rating *</label>
+                                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                            {[1, 2, 3, 4, 5].map(star => (
+                                                <button
+                                                    key={star}
+                                                    type="button"
+                                                    onClick={() => setReviewRating(star)}
+                                                    onMouseEnter={() => setHoverRating(star)}
+                                                    onMouseLeave={() => setHoverRating(0)}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        padding: '0.15rem',
+                                                        transition: 'transform 0.15s',
+                                                        transform: (hoverRating >= star || reviewRating >= star) ? 'scale(1.15)' : 'scale(1)'
+                                                    }}
+                                                >
+                                                    <Star
+                                                        size={28}
+                                                        fill={(hoverRating || reviewRating) >= star ? '#fbbf24' : 'none'}
+                                                        color={(hoverRating || reviewRating) >= star ? '#fbbf24' : '#555'}
+                                                        strokeWidth={1.5}
+                                                    />
+                                                </button>
+                                            ))}
+                                            {reviewRating > 0 && (
+                                                <span style={{ marginLeft: '0.5rem', color: '#fbbf24', fontSize: '0.9rem', alignSelf: 'center', fontWeight: 600 }}>
+                                                    {reviewRating}/5
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Title */}
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Title *</label>
+                                        <input
+                                            id="review-title"
+                                            type="text"
+                                            value={reviewTitle}
+                                            onChange={e => setReviewTitle(e.target.value)}
+                                            placeholder="Sum up your experience..."
+                                            maxLength={100}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.65rem 0.75rem',
+                                                borderRadius: '8px',
+                                                border: '1px solid var(--border-color)',
+                                                background: 'var(--bg-secondary)',
+                                                color: 'var(--text-color)',
+                                                fontSize: '0.95rem',
+                                                boxSizing: 'border-box'
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Content */}
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Your Review *</label>
+                                        <textarea
+                                            id="review-content"
+                                            value={reviewContent}
+                                            onChange={e => setReviewContent(e.target.value)}
+                                            placeholder="Share your thoughts about this product..."
+                                            rows={4}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.65rem 0.75rem',
+                                                borderRadius: '8px',
+                                                border: '1px solid var(--border-color)',
+                                                background: 'var(--bg-secondary)',
+                                                color: 'var(--text-color)',
+                                                resize: 'vertical',
+                                                fontSize: '0.95rem',
+                                                boxSizing: 'border-box'
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Submit */}
+                                    <button
+                                        id="submit-review-btn"
+                                        className="btn"
+                                        onClick={handleReview}
+                                        disabled={isSubmittingReview || !reviewTitle.trim() || !reviewContent.trim() || reviewRating === 0}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '0.4rem',
+                                            padding: '0.6rem 1.2rem',
+                                            fontSize: '0.95rem',
+                                            fontWeight: 600,
+                                            background: (isSubmittingReview || !reviewTitle.trim() || !reviewContent.trim() || reviewRating === 0) ? '#555' : 'linear-gradient(135deg, #f59e0b, #d97706)',
+                                            border: 'none',
+                                            opacity: (isSubmittingReview || !reviewTitle.trim() || !reviewContent.trim() || reviewRating === 0) ? 0.6 : 1,
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        <Star size={16} />
+                                        {isSubmittingReview ? 'Posting...' : 'Submit Review'}
+                                    </button>
+                                </div>
+                            )}
+
                             {reviews.length > 0 ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                     {reviews.map(review => (

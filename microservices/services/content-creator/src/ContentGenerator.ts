@@ -77,9 +77,9 @@ export class ContentGenerator {
             // 1. Fetch products to get a valid productId
             const productsUrl = `http://product-service:3002/`;
             const productsRes = await axios.get(productsUrl);
-            const products = productsRes.data;
+            const products = productsRes.data.products || productsRes.data;
 
-            if (!products || products.length === 0) {
+            if (!products || !Array.isArray(products) || products.length === 0) {
                 throw new Error("No products available to review.");
             }
 
