@@ -38,8 +38,15 @@ app.get('/health', (req, res) => {
     res.json({ status: 'Monolith Backend is running', db: 'PostgreSQL' });
 });
 
+// Primary port
 app.listen(PORT, async () => {
     await connectRedis();
-    console.log(`🚀 Monolith Backend running on port ${PORT}`);
+    console.log(`🚀 Monolith Backend running on port ${PORT} (primary)`);
     console.log(`🐘 Database: PostgreSQL (Prisma)`);
+});
+
+// Backup port — used when the primary port is hijacked by WSL2/wslrelay on Windows
+const PORT_BACKUP = process.env.PORT_BACKUP || 4090;
+app.listen(PORT_BACKUP, () => {
+    console.log(`🚀 Monolith Backend running on port ${PORT_BACKUP} (backup)`);
 });

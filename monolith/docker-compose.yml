@@ -4,13 +4,18 @@ services:
     build: ./backend
     ports:
       - "4000:4000"
+      - "4090:4090"
     env_file: ./backend/.env
     environment:
       - DATABASE_URL=postgresql://postgres:8011nedimK216@postgres:5432/monolith_db?schema=public
       - REDIS_URL=redis://redis:6379
+      - PORT=4000
+      - PORT_BACKUP=4090
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     restart: on-failure
 
   monolith-client:
@@ -18,7 +23,7 @@ services:
     ports:
       - "5174:5173"
     environment:
-      - VITE_API_URL=http://localhost:4000
+      - VITE_API_URL=http://localhost:4090
     volumes:
       - ./client:/app
       - /app/node_modules
@@ -46,6 +51,11 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data_monolith:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   postgres_data_monolith:

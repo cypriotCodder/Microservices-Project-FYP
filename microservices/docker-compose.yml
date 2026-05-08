@@ -3,9 +3,12 @@ services:
     build: ./api-gateway
     ports:
       - "8080:8080"
+      - "8090:8090"
     env_file: ./api-gateway/.env
     environment:
       - SERVICE_NAME=api-gateway
+      - PORT=8080
+      - PORT_BACKUP=8090
       - AUTH_SERVICE_URL=http://auth-service:3001
       - PRODUCT_SERVICE_URL=http://product-service:3002
       - ORDER_SERVICE_URL=http://order-service:3003
@@ -62,6 +65,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   auth-service:
     build: ./services/auth-service
@@ -70,6 +78,10 @@ services:
     env_file: ./services/auth-service/.env
     environment:
       - DATABASE_URL=postgresql://postgres:8011nedimK216@postgres:5432/microservices_db?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
 
   product-service:
     build: ./services/product-service
@@ -99,6 +111,9 @@ services:
     env_file: ./services/recommendation-service/.env
     environment:
       - DATABASE_URL=postgresql://postgres:8011nedimK216@postgres:5432/microservices_db?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   traffic-service:
     build: ./services/traffic-service
@@ -129,7 +144,7 @@ services:
     ports:
       - "5178:5173"
     environment:
-      - VITE_API_URL=http://localhost:8080
+      - VITE_API_URL=http://localhost:8090
     volumes:
       - ./client:/app
       - /app/node_modules

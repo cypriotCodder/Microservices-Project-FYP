@@ -94,6 +94,13 @@ app.use('/traffic', createCircuitBreakerProxy({
 
 app.use('/admin', authMiddleware, adminRoutes);
 
+// Primary port
 app.listen(PORT, () => {
-    console.log(`Enterprise API Gateway running on port ${PORT}`);
+    console.log(`Enterprise API Gateway running on port ${PORT} (primary)`);
+});
+
+// Backup port — used when the primary port is hijacked by WSL2/wslrelay on Windows
+const PORT_BACKUP = process.env.PORT_BACKUP || 8090;
+app.listen(PORT_BACKUP, () => {
+    console.log(`Enterprise API Gateway running on port ${PORT_BACKUP} (backup)`);
 });
