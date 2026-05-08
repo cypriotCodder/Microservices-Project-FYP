@@ -19,4 +19,4 @@ RUN npm run build
 EXPOSE 3001
 
 ENV NODE_OPTIONS="--max-old-space-size=512"
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/seed.js && npm start"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/seed.js && npm start"]
