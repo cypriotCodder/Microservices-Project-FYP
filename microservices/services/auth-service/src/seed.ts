@@ -34,7 +34,7 @@ async function seed() {
     const prisma = new PrismaClient({ adapter });
 
     try {
-        const hash = await bcrypt.hash('Admin@123', 10);
+        const hash = await bcrypt.hash('admin', 10);
         await prisma.user.upsert({
             where: { username: 'admin@fyp.com' },
             update: { password: hash, role: 'ADMIN' },

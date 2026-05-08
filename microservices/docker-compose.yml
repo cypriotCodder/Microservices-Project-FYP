@@ -144,7 +144,7 @@ services:
     ports:
       - "5178:5173"
     environment:
-      - VITE_API_URL=http://localhost:8090
+      - VITE_API_URL=http://localhost:8080
     volumes:
       - ./client:/app
       - /app/node_modules

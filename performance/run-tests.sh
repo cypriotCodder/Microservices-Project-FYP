@@ -14,8 +14,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MONOLITH_URL="${MONOLITH_URL:-http://host.docker.internal:4000}"
 MICROSERVICES_URL="${MICROSERVICES_URL:-http://host.docker.internal:8080}"
 
-MONOLITH_DIR="/c/Users/PC/Microservices-Project-FYP/monolith"
-MICROSERVICES_DIR="/c/Users/PC/Microservices-Project-FYP/microservices"
+MONOLITH_DIR="/Users/nedim/Desktop/myRepo/FYP/deneme1/monolith"
+MICROSERVICES_DIR="/Users/nedim/Desktop/myRepo/FYP/deneme1/microservices"
 
 mkdir -p "$SCRIPT_DIR/results"
 
