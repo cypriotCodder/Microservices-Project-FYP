@@ -8,6 +8,28 @@ dotenv.config();
 
 async function seed() {
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+    // Create both tables via raw SQL so neither service's startup drops the other's table.
+    // This is required because auth-service and recommendation-service share the same
+    // public schema, and prisma db push would drop tables not in its own schema.
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS "User" (
+            id SERIAL PRIMARY KEY,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'USER',
+            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS "Recommendation" (
+            id SERIAL PRIMARY KEY,
+            "userId" TEXT NOT NULL,
+            "productId" TEXT NOT NULL,
+            score DOUBLE PRECISION NOT NULL,
+            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
+    console.log('[Seed] ✅ Shared schema tables verified (User + Recommendation)');
+
     const adapter = new PrismaPg(pool);
     const prisma = new PrismaClient({ adapter });
 
