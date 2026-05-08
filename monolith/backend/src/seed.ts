@@ -1,16 +1,10 @@
 import dotenv from 'dotenv';
 import bcrypt from 'bcrypt';
-import { PrismaClient } from '@prisma/client';
-import { Pool } from 'pg';
-import { PrismaPg } from '@prisma/adapter-pg';
+import { prisma } from './config/prisma';
 
 dotenv.config();
 
 async function seed() {
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-    const adapter = new PrismaPg(pool);
-    const prisma = new PrismaClient({ adapter });
-
     try {
         const hash = await bcrypt.hash('Admin@123', 10);
         await prisma.user.upsert({
@@ -24,7 +18,6 @@ async function seed() {
         process.exit(1);
     } finally {
         await prisma.$disconnect();
-        await pool.end();
     }
 }
 

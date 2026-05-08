@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { fetchFromAPI } from '../api/client';
 import '../styles/main.css';
 
 export function Login() {
@@ -9,19 +10,15 @@ export function Login() {
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Simulate login call to Auth Service via Gateway
-        const response = await fetch('http://localhost:8080/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password }),
-        });
-
-        if (response.ok) {
-            const data = await response.json();
+        try {
+            const data = await fetchFromAPI('/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({ username, password }),
+            });
             localStorage.setItem('user', JSON.stringify(data));
             navigate('/');
-        } else {
-            alert('Login Failed');
+        } catch (err: any) {
+            alert(err.message || 'Login Failed');
         }
     };
 
