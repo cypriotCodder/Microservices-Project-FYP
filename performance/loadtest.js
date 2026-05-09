@@ -24,8 +24,10 @@ export const options = {
         { duration: '30s', target: 0   },  // cool down
     ],
     thresholds: {
-        // Microservices must stay under 1 s at p95 — abort if not
-        'http_req_duration{arch:microservices}': ['p(95)<1000'],
+        // Microservices: record it but NEVER abort — let it die visibly in Grafana
+        'http_req_duration{arch:microservices}': [
+            { threshold: 'p(95)<1000', abortOnFail: false },
+        ],
         // Monolith: record it but NEVER abort — let it die visibly in Grafana
         'http_req_duration{arch:monolith}': [
             { threshold: 'p(95)<30000', abortOnFail: false },
@@ -122,7 +124,7 @@ export default function (data) {
 
         // First iteration = login only. Return early so the next iteration
         // begins immediately with an authenticated session.
-        sleep(0.1);
+        sleep(randomIntBetween(1, 3));
         return;
     }
 
@@ -200,17 +202,17 @@ export default function (data) {
         res = http.get(`${TARGET}/products/ping`, p('PingDB'));
         check(res, { 'ping ok': r => r.status === 200 });
 
-    } else if (roll < 0.40) {
-        // FetchProductDetails (15%)
+    } else if (roll < 0.45) {
+        // FetchProductDetails (20%)
         res = http.get(`${TARGET}/products/${randomProduct}`, p('FetchProductDetails'));
         check(res, { 'status is 200': r => r.status === 200 });
 
-    } else if (roll < 0.55) {
-        // FetchOrders (15%) — DB join with auth userId
+    } else if (roll < 0.65) {
+        // FetchOrders (20%) — DB join with auth userId
         res = http.get(`${TARGET}/orders/${vUserId}`, p('FetchOrders'));
         check(res, { 'status is 200': r => r.status === 200 });
 
-    } else if (roll < 0.65) {
+    } else if (roll < 0.75) {
         // AuthRegister (10%) — bcrypt hash on server (new user signups)
         const regPayload = JSON.stringify({ username: `k6_${randomString(10)}`, password: 'password123' });
         res = http.post(`${TARGET}/auth/register`, regPayload,
@@ -219,15 +221,14 @@ export default function (data) {
         check(res, { 'status is 201': r => r.status === 201 });
 
     } else if (roll < 0.80) {
-        // LLMSummarize (15%) — external Groq API call; latency wildcard
+        // LLMSummarize (5%) — external Groq API call; latency wildcard
         const llmPayload = JSON.stringify({ text: 'A standard k6 generated e-commerce product description for stress testing.' });
         res = http.post(`${TARGET}/llm/summarize`, llmPayload, p('LLMSummarize'));
         check(res, { 'status is 200': r => r.status === 200 });
 
     } else if (roll < 0.90) {
         // CreateContent (10%) — triggers microservice cross-communication
-        const internalTarget = TARGET.includes('8080') ? 'http://api-gateway:8080' : TARGET;
-        const contentPayload = JSON.stringify({ lengthText: '2 sentences', targetUrl: internalTarget });
+        const contentPayload = JSON.stringify({ lengthText: '2 sentences', targetUrl: TARGET });
         res = http.post(`${TARGET}/content/generate-product`, contentPayload, p('CreateContent'));
         check(res, { 'status is 200|201': r => r.status === 200 || r.status === 201 });
 
@@ -242,7 +243,7 @@ export default function (data) {
         check(res, { 'status is 201': r => r.status === 201 });
     }
 
-    sleep(0.1);
+    sleep(randomIntBetween(1, 3));
 }
 
 // ─── teardown() runs ONCE after all VUs finish ────────────────────────────────

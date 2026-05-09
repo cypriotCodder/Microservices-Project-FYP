@@ -37,6 +37,7 @@ DOCKER_CONFIG=$(mktemp -d) /usr/local/bin/docker-compose run --no-deps -T --rm \
     -e TARGET_URL="$MICROSERVICES_URL" \
     -e ARCH="microservices" \
     k6 run --tag arch=microservices \
+           --out influxdb=http://influxdb:8086/k6 \
            --summary-export=/results/results-microservices.json \
            /scripts/loadtest.js || true
 MS_CODE=$?
@@ -55,6 +56,7 @@ DOCKER_CONFIG=$(mktemp -d) /usr/local/bin/docker-compose run --no-deps -T --rm \
     -e TARGET_URL="$MONOLITH_URL" \
     -e ARCH="monolith" \
     k6 run --tag arch=monolith \
+           --out influxdb=http://influxdb:8086/k6 \
            --summary-export=/results/results-monolith.json \
            /scripts/loadtest.js || true
 M_CODE=$?
@@ -142,22 +144,28 @@ echo ""
 # Both endpoints are unauthenticated so this never silently fails.
 echo "Cleaning up k6 test comments..."
 
-# Wait briefly for containers to be fully ready after restart
-sleep 5
+# Wait for containers to be fully ready after restart
+echo "Waiting for services to be ready..."
+sleep 15
 
-MONO_CLEAN=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE http://localhost:4000/products/comments/k6)
-MONO_MSG=$(curl -s -X DELETE http://localhost:4000/products/comments/k6)
-if [ "$MONO_CLEAN" == "200" ]; then
+curl -sf http://localhost:4000/products > /dev/null && echo "Monolith ready" || echo "Monolith not ready"
+curl -sf http://localhost:8080/products > /dev/null && echo "Microservices ready" || echo "Microservices not ready"
+
+MONO_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE http://localhost:4000/products/comments/k6)
+MONO_CODE=$(echo "$MONO_RESPONSE" | tail -1)
+MONO_MSG=$(echo "$MONO_RESPONSE" | head -1)
+if [ "$MONO_CODE" == "200" ]; then
     echo "  ✅ Monolith:      $MONO_MSG"
 else
-    echo "  ❌ Monolith cleanup failed [HTTP $MONO_CLEAN]: $MONO_MSG"
+    echo "  ❌ Monolith cleanup failed [HTTP $MONO_CODE]: $MONO_MSG"
 fi
 
-MICRO_CLEAN=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE http://localhost:8080/products/comments/k6)
-MICRO_MSG=$(curl -s -X DELETE http://localhost:8080/products/comments/k6)
-if [ "$MICRO_CLEAN" == "200" ]; then
+MICRO_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE http://localhost:8080/products/comments/k6)
+MICRO_CODE=$(echo "$MICRO_RESPONSE" | tail -1)
+MICRO_MSG=$(echo "$MICRO_RESPONSE" | head -1)
+if [ "$MICRO_CODE" == "200" ] || [ "$MICRO_CODE" == "202" ]; then
     echo "  ✅ Microservices: $MICRO_MSG"
 else
-    echo "  ❌ Microservices cleanup failed [HTTP $MICRO_CLEAN]: $MICRO_MSG"
+    echo "  ❌ Microservices cleanup failed [HTTP $MICRO_CODE]: $MICRO_MSG"
 fi
 echo ""
