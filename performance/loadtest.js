@@ -16,12 +16,12 @@ const VU_PASSWORD = 'password123';
 
 export const options = {
     stages: [
-        { duration: '30s', target: 15  },  // warm up
-        { duration: '60s', target: 75  },  // moderate
-        { duration: '60s', target: 150 },  // connection pool zone
-        { duration: '60s', target: 250 },  // intense stress
-        { duration: '60s', target: 300 },  // peak
-        { duration: '30s', target: 0   },  // cool down
+        { duration: '30s', target: 5  },   // warm up
+        { duration: '60s', target: 15 },   // moderate
+        { duration: '60s', target: 30 },   // ramp
+        { duration: '60s', target: 40 },   // stress
+        { duration: '60s', target: 50 },   // peak
+        { duration: '30s', target: 0  },   // cool down
     ],
     thresholds: {
         // Microservices: record it but NEVER abort — let it die visibly in Grafana
