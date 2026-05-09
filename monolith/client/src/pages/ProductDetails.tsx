@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { Navbar } from '../components/Navbar';
+import { useParams, Link } from 'react-router-dom';
 import { fetchFromAPI } from '../api/client';
-import { Sparkles, PackageCheck, AlertCircle, MessageSquare, Send, Star, ChevronDown, ChevronUp } from 'lucide-react';
-import '../styles/main.css';
+import { useCart } from '../context/CartContext';
+import { Icon } from '../components/Icon';
 
 interface Product {
     _id: string;
-    id?: number;
+    id: number;
     name: string;
     price: number;
     description: string;
     stock: number;
+    category: string;
     image?: string;
+    swatch?: string;
 }
 
 interface Review {
@@ -32,46 +33,44 @@ interface Comment {
     createdAt: string;
 }
 
+const Placeholder = ({ swatch = "#E8DCC8" }: { swatch?: string }) => (
+    <div className="w-full h-full swatch-stripe" style={{ backgroundColor: swatch }} />
+);
+
 export default function ProductDetails() {
     const { id } = useParams<{ id: string }>();
     const [product, setProduct] = useState<Product | null>(null);
     const [reviews, setReviews] = useState<Review[]>([]);
     const [comments, setComments] = useState<Comment[]>([]);
     const [loading, setLoading] = useState(true);
+    
     const [summary, setSummary] = useState<string | null>(null);
     const [isSummarizing, setIsSummarizing] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    
     const [commentText, setCommentText] = useState('');
     const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-    const [commentFeedback, setCommentFeedback] = useState<{ type: 'saved' | 'error'; msg: string } | null>(null);
 
-    // Review form state
     const [showReviewForm, setShowReviewForm] = useState(false);
     const [reviewTitle, setReviewTitle] = useState('');
     const [reviewContent, setReviewContent] = useState('');
     const [reviewRating, setReviewRating] = useState(0);
-    const [hoverRating, setHoverRating] = useState(0);
     const [isSubmittingReview, setIsSubmittingReview] = useState(false);
-    const [reviewFeedback, setReviewFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+    const { cart, addToCart, incQty, decQty } = useCart();
 
     useEffect(() => {
         const fetchDetails = async () => {
             try {
                 const prodData = await fetchFromAPI(`/products/${id}`);
-                setProduct(prodData);
+                setProduct({ ...prodData, id: prodData.id || Number(prodData._id) });
                 const reviewData = await fetchFromAPI(`/products/${id}/reviews`);
                 setReviews(Array.isArray(reviewData) ? reviewData : []);
 
-                // Comments fetch is isolated — a missing DB table or unbuilt container
-                // must not crash the product/review section above it.
                 try {
                     const commentData = await fetchFromAPI(`/products/${id}/comments`);
                     setComments(Array.isArray(commentData) ? commentData : []);
-                } catch {
-                    // Silently degrade — comments section shows empty until table exists
-                }
+                } catch {}
 
-                // Track product view/click for recommendations
                 const userStr = localStorage.getItem('user');
                 const currentUser = userStr ? JSON.parse(userStr) : null;
                 const currentUserId = currentUser?.userId || "1";
@@ -79,10 +78,10 @@ export default function ProductDetails() {
                 fetchFromAPI('/recommendations/click', {
                     method: 'POST',
                     body: JSON.stringify({ userId: currentUserId, productId: id })
-                }).catch(err => console.error("Could not track click:", err));
+                }).catch(() => {});
 
-            } catch (err: any) {
-                setError(err.message || 'Failed to fetch product details.');
+            } catch (err) {
+                console.error(err);
             } finally {
                 setLoading(false);
             }
@@ -94,8 +93,6 @@ export default function ProductDetails() {
         setIsSummarizing(true);
         try {
             const payloadText = `Product Name: ${product?.name}\n\nProduct Full Description: ${product?.description || 'No description available.'}`;
-
-            // This hits the monolith backend which natively triggers its own LLM integration
             const response = await fetchFromAPI('/llm/summarize', {
                 method: 'POST',
                 body: JSON.stringify({ text: payloadText })
@@ -111,7 +108,6 @@ export default function ProductDetails() {
     const handleReview = async () => {
         if (!reviewTitle.trim() || !reviewContent.trim() || reviewRating === 0 || !product) return;
         setIsSubmittingReview(true);
-        setReviewFeedback(null);
         try {
             const userStr = localStorage.getItem('user');
             const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -129,13 +125,12 @@ export default function ProductDetails() {
 
             const newReview = response.review || response.data || response;
             setReviews(prev => [{ ...newReview, _id: newReview._id || newReview.id || Date.now().toString() }, ...prev]);
-            setReviewFeedback({ type: 'success', msg: '✓ Review posted successfully!' });
             setReviewTitle('');
             setReviewContent('');
             setReviewRating(0);
             setShowReviewForm(false);
         } catch (e: any) {
-            setReviewFeedback({ type: 'error', msg: 'Failed to post review: ' + e.message });
+            alert('Failed to post review: ' + e.message);
         } finally {
             setIsSubmittingReview(false);
         }
@@ -144,7 +139,6 @@ export default function ProductDetails() {
     const handleComment = async () => {
         if (!commentText.trim() || !product) return;
         setIsSubmittingComment(true);
-        setCommentFeedback(null);
         try {
             const userStr = localStorage.getItem('user');
             const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -155,380 +149,206 @@ export default function ProductDetails() {
                 body: JSON.stringify({ userId, content: commentText.trim() })
             });
 
-            // Monolith writes synchronously (201) — add to local state immediately
             const now = new Date().toISOString();
             setComments(prev => [{ userId, content: commentText.trim(), createdAt: now }, ...prev]);
-            setCommentFeedback({ type: 'saved', msg: '✓ Comment saved.' });
             setCommentText('');
         } catch (e: any) {
-            setCommentFeedback({ type: 'error', msg: 'Failed to post comment: ' + e.message });
+            alert('Failed to post comment: ' + e.message);
         } finally {
             setIsSubmittingComment(false);
         }
     };
 
-    const handleOrder = async () => {
-        if (!product) return;
-        try {
-            const userStr = localStorage.getItem('user');
-            const currentUser = userStr ? JSON.parse(userStr) : null;
-            const currentUserId = currentUser?.userId || "1";
+    if (loading) return <div className="text-center py-32 text-mute">loading product details...</div>;
+    if (!product) return <div className="text-center py-32 text-coralHi">product not found</div>;
 
-            await fetchFromAPI('/orders', {
-                method: 'POST',
-                body: JSON.stringify({
-                    userId: currentUserId,
-                    totalAmount: product.price,
-                    products: [{ productId: product._id || (product as any).id, quantity: 1 }]
-                })
-            });
-
-            // Update the local state to reflect the stock decrease immediately
-            setProduct(prevProduct =>
-                prevProduct ? { ...prevProduct, stock: prevProduct.stock - 1 } : null
-            );
-            alert('Order placed successfully!');
-        } catch (e) {
-            alert('Failed to place order');
-        }
-    };
-
-    if (loading) return <div><Navbar /><div className="container" style={{ textAlign: 'center', marginTop: '50px' }}>Loading...</div></div>;
-    if (error || !product) return <div><Navbar /><div className="container" style={{ textAlign: 'center', color: 'red', marginTop: '50px' }}>{error || 'Product not found'}</div></div>;
+    const out = product.stock === 0;
+    const qty = cart[product.id] || 0;
 
     return (
-        <div>
-            <Navbar />
-            <div className="container" style={{ maxWidth: '1000px', margin: '2rem auto', padding: '0 1rem' }}>
-                <div style={{ display: 'flex', gap: '3rem', flexDirection: 'row', flexWrap: 'wrap' }}>
+        <article className="max-w-7xl mx-auto px-6 lg:px-10 py-12 animate-slideIn">
+            <div className="flex items-center gap-2 text-xs text-mute mb-8">
+                <Link to="/" className="hover:text-ink transition">store catalog</Link>
+                <span>/</span>
+                <span className="text-ink">{product.name.toLowerCase()}</span>
+            </div>
 
-                    {/* Left Column: Product Info */}
-                    <div style={{ flex: '1 1 400px' }}>
-                        <div style={{
-                            height: '300px',
-                            background: 'linear-gradient(45deg, #333, #444)',
-                            backgroundImage: product.image ? `url(${product.image})` : 'linear-gradient(45deg, #333, #444)',
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
-                            borderRadius: '12px',
-                            marginBottom: '2rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#666',
-                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                        }}>
-                            {!product.image && 'No Image Available'}
-                        </div>
-                        <h1 style={{ fontSize: '2.5rem', marginBottom: '1rem', color: 'var(--text-color)' }}>{product.name}</h1>
-                        <p style={{ fontSize: '1.5rem', color: 'var(--accent-color)', fontWeight: 'bold', marginBottom: '1rem' }}>${product.price}</p>
+            <div className="grid md:grid-cols-2 gap-12 lg:gap-20">
+                {/* Left: Image */}
+                <div className="aspect-square rounded-3xl overflow-hidden bg-paper shadow-cardHi border border-line">
+                    <Placeholder swatch={product.swatch} />
+                </div>
 
-                        <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: product.stock > 0 ? 'var(--success)' : 'var(--error)' }}>
-                            {product.stock > 0 ? <PackageCheck size={20} /> : <AlertCircle size={20} />}
-                            <span style={{ fontSize: '1.1rem' }}>{product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}</span>
-                        </div>
+                {/* Right: Info */}
+                <div className="flex flex-col justify-center">
+                    <div className="mb-2 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-paper border border-line text-[11px] font-medium tracking-wide uppercase text-mute shadow-card">
+                        {product.category || 'Uncategorized'}
+                    </div>
+                    <h1 className="text-4xl lg:text-5xl tracking-tight font-medium mb-4">{product.name}</h1>
+                    <div className="text-2xl text-coral font-medium tabular-nums mb-6">${product.price.toFixed(2)}</div>
 
-                        <div style={{ marginBottom: '2rem' }}>
-                            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>Description</h3>
-                            <p style={{ lineHeight: '1.6', color: 'var(--text-secondary)' }}>
-                                {product.description || 'No description provided for this product.'}
-                            </p>
-                        </div>
-
-                        <button
-                            className="btn"
-                            style={{
-                                width: '100%',
-                                padding: '1rem',
-                                fontSize: '1.1rem',
-                                fontWeight: 'bold',
-                                opacity: product.stock > 0 ? 1 : 0.5,
-                                cursor: product.stock > 0 ? 'pointer' : 'not-allowed'
-                            }}
-                            onClick={handleOrder}
-                            disabled={product.stock === 0}
-                        >
-                            {product.stock > 0 ? 'Add to Cart' : 'Sold Out'}
-                        </button>
+                    <div className="flex items-center gap-2 mb-8">
+                        {out ? (
+                            <span className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-line/70 text-mute text-xs">
+                                <span className="w-1.5 h-1.5 rounded-full bg-mute" /> out of stock
+                            </span>
+                        ) : (
+                            <span className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-sageBg text-sage text-xs">
+                                <span className="w-1.5 h-1.5 rounded-full bg-sage" /> {product.stock} in stock
+                            </span>
+                        )}
                     </div>
 
-                    {/* Right Column: AI Summary, Reviews & Comments */}
-                    <div style={{ flex: '1 1 400px' }}>
-                        <div style={{
-                            background: 'var(--card-bg)',
-                            padding: '1.5rem',
-                            borderRadius: '12px',
-                            marginBottom: '2rem',
-                            border: '1px solid var(--border-color)',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                <h3 style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-                                    <Sparkles size={20} color="#6366f1" /> AI Summary
-                                </h3>
-                                <button
-                                    className="btn btn-summarize"
-                                    onClick={handleSummarize}
-                                    disabled={isSummarizing || !product?.description}
-                                    style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', opacity: (isSummarizing || !product?.description) ? 0.8 : 1, backgroundColor: '#6366f1', border: 'none' }}
-                                >
-                                    {isSummarizing ? 'Summarizing...' : 'Summarize details'}
+                    <div className="text-mute text-sm leading-relaxed mb-10">
+                        {product.description || 'No description provided for this product.'}
+                    </div>
+
+                    <div className="pt-8 border-t border-line">
+                        {qty > 0 ? (
+                            <div className="animate-slideIn flex items-center justify-between h-14 rounded-full bg-ink text-paper px-2 max-w-[240px]">
+                                <button onClick={() => decQty(product)} className="h-10 w-10 grid place-items-center rounded-full hover:bg-paper/10 transition">
+                                    <Icon name="minus" size={16} />
+                                </button>
+                                <span className="text-sm tabular-nums font-medium">{qty} in cart</span>
+                                <button onClick={() => incQty(product)} className="h-10 w-10 grid place-items-center rounded-full hover:bg-paper/10 transition">
+                                    <Icon name="plus" size={16} />
                                 </button>
                             </div>
-
-                            {summary ? (
-                                <p style={{ fontStyle: 'italic', color: 'var(--text-color)', lineHeight: '1.5', background: 'rgba(99, 102, 241, 0.1)', padding: '1rem', borderRadius: '8px', borderLeft: '4px solid var(--accent-color)' }}>
-                                    "{summary}"
-                                </p>
-                            ) : (
-                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-                                    Click 'Summarize' to ask our AI to concisely read and summarize the product description.
-                                </p>
-                            )}
-                        </div>
-
-                        <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-                                <h3 style={{ fontSize: '1.2rem', margin: 0 }}>
-                                    Customer Reviews ({reviews.length})
-                                </h3>
-                                <button
-                                    id="toggle-review-form"
-                                    onClick={() => { setShowReviewForm(!showReviewForm); setReviewFeedback(null); }}
-                                    style={{
-                                        background: 'rgba(251, 191, 36, 0.1)',
-                                        color: '#fbbf24',
-                                        border: '1px solid rgba(251, 191, 36, 0.4)',
-                                        padding: '0.4rem 0.8rem',
-                                        borderRadius: '6px',
-                                        cursor: 'pointer',
-                                        fontSize: '0.85rem',
-                                        fontWeight: 600,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.3rem',
-                                        transition: 'all 0.2s'
-                                    }}
-                                >
-                                    <Star size={14} />
-                                    {showReviewForm ? 'Cancel' : 'Write a Review'}
-                                    {showReviewForm ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                </button>
-                            </div>
-
-                            {/* Review Feedback */}
-                            {reviewFeedback && (
-                                <div style={{
-                                    padding: '0.6rem 1rem',
-                                    marginBottom: '1rem',
-                                    borderRadius: '8px',
-                                    fontSize: '0.85rem',
-                                    fontWeight: 500,
-                                    border: reviewFeedback.type === 'success' ? '1px solid rgba(76,175,80,0.5)' : '1px solid rgba(244,67,54,0.5)',
-                                    background: reviewFeedback.type === 'success' ? 'rgba(76,175,80,0.1)' : 'rgba(244,67,54,0.1)',
-                                    color: reviewFeedback.type === 'success' ? '#4caf50' : '#f44336'
-                                }}>
-                                    {reviewFeedback.msg}
-                                </div>
-                            )}
-
-                            {/* Review Form */}
-                            {showReviewForm && (
-                                <div style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '0.75rem',
-                                    marginBottom: '1.5rem',
-                                    background: 'var(--card-bg)',
-                                    padding: '1.25rem',
-                                    borderRadius: '10px',
-                                    border: '1px solid rgba(251, 191, 36, 0.25)',
-                                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                                }}>
-                                    {/* Star Rating */}
-                                    <div>
-                                        <label style={{ display: 'block', marginBottom: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Rating *</label>
-                                        <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                            {[1, 2, 3, 4, 5].map(star => (
-                                                <button
-                                                    key={star}
-                                                    type="button"
-                                                    onClick={() => setReviewRating(star)}
-                                                    onMouseEnter={() => setHoverRating(star)}
-                                                    onMouseLeave={() => setHoverRating(0)}
-                                                    style={{
-                                                        background: 'none',
-                                                        border: 'none',
-                                                        cursor: 'pointer',
-                                                        padding: '0.15rem',
-                                                        transition: 'transform 0.15s',
-                                                        transform: (hoverRating >= star || reviewRating >= star) ? 'scale(1.15)' : 'scale(1)'
-                                                    }}
-                                                >
-                                                    <Star
-                                                        size={28}
-                                                        fill={(hoverRating || reviewRating) >= star ? '#fbbf24' : 'none'}
-                                                        color={(hoverRating || reviewRating) >= star ? '#fbbf24' : '#555'}
-                                                        strokeWidth={1.5}
-                                                    />
-                                                </button>
-                                            ))}
-                                            {reviewRating > 0 && (
-                                                <span style={{ marginLeft: '0.5rem', color: '#fbbf24', fontSize: '0.9rem', alignSelf: 'center', fontWeight: 600 }}>
-                                                    {reviewRating}/5
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Title */}
-                                    <div>
-                                        <label style={{ display: 'block', marginBottom: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Title *</label>
-                                        <input
-                                            id="review-title"
-                                            type="text"
-                                            value={reviewTitle}
-                                            onChange={e => setReviewTitle(e.target.value)}
-                                            placeholder="Sum up your experience..."
-                                            maxLength={100}
-                                            style={{
-                                                width: '100%',
-                                                padding: '0.65rem 0.75rem',
-                                                borderRadius: '8px',
-                                                border: '1px solid var(--border-color)',
-                                                background: 'var(--bg-secondary)',
-                                                color: 'var(--text-color)',
-                                                fontSize: '0.95rem',
-                                                boxSizing: 'border-box'
-                                            }}
-                                        />
-                                    </div>
-
-                                    {/* Content */}
-                                    <div>
-                                        <label style={{ display: 'block', marginBottom: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Your Review *</label>
-                                        <textarea
-                                            id="review-content"
-                                            value={reviewContent}
-                                            onChange={e => setReviewContent(e.target.value)}
-                                            placeholder="Share your thoughts about this product..."
-                                            rows={4}
-                                            style={{
-                                                width: '100%',
-                                                padding: '0.65rem 0.75rem',
-                                                borderRadius: '8px',
-                                                border: '1px solid var(--border-color)',
-                                                background: 'var(--bg-secondary)',
-                                                color: 'var(--text-color)',
-                                                resize: 'vertical',
-                                                fontSize: '0.95rem',
-                                                boxSizing: 'border-box'
-                                            }}
-                                        />
-                                    </div>
-
-                                    {/* Submit */}
-                                    <button
-                                        id="submit-review-btn"
-                                        className="btn"
-                                        onClick={handleReview}
-                                        disabled={isSubmittingReview || !reviewTitle.trim() || !reviewContent.trim() || reviewRating === 0}
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '0.4rem',
-                                            padding: '0.6rem 1.2rem',
-                                            fontSize: '0.95rem',
-                                            fontWeight: 600,
-                                            background: (isSubmittingReview || !reviewTitle.trim() || !reviewContent.trim() || reviewRating === 0) ? '#555' : 'linear-gradient(135deg, #f59e0b, #d97706)',
-                                            border: 'none',
-                                            opacity: (isSubmittingReview || !reviewTitle.trim() || !reviewContent.trim() || reviewRating === 0) ? 0.6 : 1,
-                                            transition: 'all 0.2s'
-                                        }}
-                                    >
-                                        <Star size={16} />
-                                        {isSubmittingReview ? 'Posting...' : 'Submit Review'}
-                                    </button>
-                                </div>
-                            )}
-
-                            {reviews.length > 0 ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                    {reviews.map(review => (
-                                        <div key={review._id} style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                                <span style={{ fontWeight: 'bold' }}>{'⭐'.repeat(review.rating)}</span>
-                                                <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                                                    {new Date(review.createdAt).toLocaleDateString()}
-                                                </span>
-                                            </div>
-                                            {review.title && <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.05rem', color: 'var(--text-color)' }}>{review.title}</h4>}
-                                            <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: '1.4' }}>{review.content}</p>
-                                            <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>User: {review.userId}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p style={{ color: 'var(--text-secondary)' }}>No reviews yet. Be the first to leave a review!</p>
-                            )}
-                        </div>
-
-                        {/* Comments Section */}
-                        <div style={{ marginTop: '2rem' }}>
-                            <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <MessageSquare size={18} /> Comments ({comments.length})
-                            </h3>
-
-                            {/* Submit form */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem', background: 'var(--card-bg)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-                                <textarea
-                                    id="comment-input"
-                                    value={commentText}
-                                    onChange={e => setCommentText(e.target.value)}
-                                    placeholder="Leave a comment..."
-                                    rows={3}
-                                    style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-color)', resize: 'vertical', fontSize: '0.95rem', boxSizing: 'border-box' }}
-                                />
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    {commentFeedback && (
-                                        <span style={{ fontSize: '0.85rem', color: commentFeedback.type === 'error' ? 'var(--error)' : '#37872D', fontStyle: 'italic' }}>
-                                            {commentFeedback.msg}
-                                        </span>
-                                    )}
-                                    <button
-                                        id="submit-comment-btn"
-                                        className="btn"
-                                        onClick={handleComment}
-                                        disabled={isSubmittingComment || !commentText.trim()}
-                                        style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1.2rem', fontSize: '0.9rem', opacity: (!commentText.trim() || isSubmittingComment) ? 0.6 : 1 }}
-                                    >
-                                        <Send size={14} />
-                                        {isSubmittingComment ? 'Saving...' : 'Post Comment'}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Comment list */}
-                            {comments.length > 0 ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                    {comments.map((c, i) => (
-                                        <div key={c.id || c._id || i} style={{ padding: '0.85rem 1rem', border: '1px solid var(--border-color)', borderRadius: '8px', background: 'rgba(255,255,255,0.02)' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                                                <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--accent-color)' }}>User {c.userId}</span>
-                                                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{new Date(c.createdAt).toLocaleString()}</span>
-                                            </div>
-                                            <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: '1.4', fontSize: '0.92rem' }}>{c.content}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>No comments yet. Be the first!</p>
-                            )}
-                        </div>
+                        ) : (
+                            <button
+                                onClick={() => addToCart(product)}
+                                disabled={out}
+                                className={`h-14 px-8 rounded-full text-sm font-medium transition flex items-center justify-center gap-2 w-full max-w-[240px] shadow-card
+                                    ${out ? 'bg-line/60 text-mute cursor-not-allowed' : 'bg-ink text-paper hover:bg-coral'}`}
+                            >
+                                {out ? 'notify me' : 'add to cart'} <Icon name="right" size={14} />
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
-        </div>
+
+            {/* Bottom Sections */}
+            <div className="mt-24 grid lg:grid-cols-[1fr_400px] gap-12 lg:gap-20">
+                
+                {/* Comments & Reviews */}
+                <div>
+                    {/* Reviews */}
+                    <div className="mb-16">
+                        <div className="flex items-end justify-between border-b border-line pb-4 mb-6">
+                            <h3 className="text-xl tracking-tight font-medium">Customer Reviews <span className="text-mute text-base">({reviews.length})</span></h3>
+                            <button onClick={() => setShowReviewForm(!showReviewForm)} className="text-sm font-medium text-coral hover:text-coralHi transition">
+                                {showReviewForm ? 'cancel' : 'write a review'}
+                            </button>
+                        </div>
+
+                        {showReviewForm && (
+                            <div className="p-6 rounded-2xl bg-paper shadow-card border border-line mb-8 animate-fadeIn">
+                                <div className="mb-4">
+                                    <label className="block text-[11px] uppercase tracking-wider text-mute mb-2">Rating</label>
+                                    <div className="flex items-center gap-1">
+                                        {[1, 2, 3, 4, 5].map(star => (
+                                            <button key={star} onClick={() => setReviewRating(star)} className="p-1 hover:scale-110 transition">
+                                                <svg width="24" height="24" viewBox="0 0 24 24" fill={reviewRating >= star ? "#E07A5F" : "none"} stroke={reviewRating >= star ? "#E07A5F" : "currentColor"} strokeWidth="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="mb-4">
+                                    <label className="block text-[11px] uppercase tracking-wider text-mute mb-2">Title</label>
+                                    <input value={reviewTitle} onChange={e => setReviewTitle(e.target.value)} placeholder="Sum up your experience..." className="focus-ring w-full h-11 px-4 rounded-xl bg-paper border border-line text-sm placeholder:text-mute" />
+                                </div>
+                                <div className="mb-4">
+                                    <label className="block text-[11px] uppercase tracking-wider text-mute mb-2">Review</label>
+                                    <textarea value={reviewContent} onChange={e => setReviewContent(e.target.value)} placeholder="Share your thoughts..." rows={4} className="focus-ring w-full p-4 rounded-xl bg-paper border border-line text-sm placeholder:text-mute resize-y" />
+                                </div>
+                                <button onClick={handleReview} disabled={isSubmittingReview || !reviewTitle || !reviewContent || !reviewRating} className="h-10 px-6 rounded-full bg-ink text-paper text-sm font-medium hover:bg-coral transition disabled:opacity-50">
+                                    {isSubmittingReview ? 'Posting...' : 'Submit Review'}
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="space-y-4">
+                            {reviews.length === 0 ? (
+                                <p className="text-sm text-mute">No reviews yet. Be the first to leave a review!</p>
+                            ) : (
+                                reviews.map(r => (
+                                    <div key={r._id} className="p-5 rounded-2xl bg-paper border border-line shadow-sm">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-1 text-coral">
+                                                {Array.from({ length: 5 }).map((_, i) => (
+                                                    <svg key={i} width="14" height="14" viewBox="0 0 24 24" fill={i < r.rating ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                                                ))}
+                                            </div>
+                                            <span className="text-xs text-mute">{new Date(r.createdAt).toLocaleDateString()}</span>
+                                        </div>
+                                        <h4 className="font-medium text-sm mb-1">{r.title}</h4>
+                                        <p className="text-sm text-mute leading-relaxed mb-3">{r.content}</p>
+                                        <div className="text-[11px] font-medium tracking-wide uppercase text-mute">By {r.userId}</div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Comments */}
+                    <div>
+                        <div className="border-b border-line pb-4 mb-6">
+                            <h3 className="text-xl tracking-tight font-medium">Discussion <span className="text-mute text-base">({comments.length})</span></h3>
+                        </div>
+
+                        <div className="mb-8 relative">
+                            <textarea value={commentText} onChange={e => setCommentText(e.target.value)} placeholder="Ask a question or leave a comment..." rows={3} className="focus-ring w-full p-4 pb-14 rounded-2xl bg-paper border border-line text-sm placeholder:text-mute resize-y" />
+                            <button onClick={handleComment} disabled={isSubmittingComment || !commentText} className="absolute right-3 bottom-3 h-8 px-4 rounded-full bg-ink text-paper text-xs font-medium hover:bg-coral transition disabled:opacity-50">
+                                Post
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            {comments.map((c, i) => (
+                                <div key={c.id || c._id || i} className="p-4 rounded-2xl bg-paper border border-line">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm font-medium text-coralHi">User {c.userId}</span>
+                                        <span className="text-xs text-mute">{new Date(c.createdAt).toLocaleString()}</span>
+                                    </div>
+                                    <p className="text-sm text-mute">{c.content}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right: AI Summary Column */}
+                <div>
+                    <div className="sticky top-24 p-6 rounded-3xl bg-coralBg/40 border border-coral/10">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-medium flex items-center gap-2 text-coralHi">
+                                <Icon name="spark" size={16} /> AI Summary
+                            </h3>
+                        </div>
+                        
+                        {summary ? (
+                            <p className="text-sm text-ink/80 leading-relaxed bg-paper/60 p-4 rounded-2xl border border-coral/20">
+                                {summary}
+                            </p>
+                        ) : (
+                            <div className="text-center">
+                                <p className="text-sm text-coralHi/70 mb-4">
+                                    Too long? Ask our AI to concisely read and summarize the product description for you.
+                                </p>
+                                <button
+                                    onClick={handleSummarize}
+                                    disabled={isSummarizing || !product?.description}
+                                    className="w-full h-10 rounded-full bg-coralBg text-coralHi text-sm font-medium hover:bg-coral/10 transition border border-coral/20 disabled:opacity-50"
+                                >
+                                    {isSummarizing ? 'Summarizing...' : 'Generate Summary'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+            </div>
+        </article>
     );
 }

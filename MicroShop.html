@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MicroShop — Store Catalog</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          paper:   '#FAFAF8',
+          ink:     '#1A1A1A',
+          line:    '#E8E8E4',
+          mute:    '#6B6B66',
+          coral:   '#E07A5F',
+          coralHi: '#D86A4D',
+          coralBg: '#FBEDE7',
+          sage:    '#7FA98B',
+          sageBg:  '#EAF1EC',
+        },
+        fontFamily: {
+          sans: ['ui-sans-serif','system-ui','-apple-system','"Segoe UI"','Roboto','"Helvetica Neue"','Arial','sans-serif'],
+        },
+        boxShadow: {
+          card:     '0 1px 2px rgba(20,20,20,0.04), 0 4px 14px -8px rgba(20,20,20,0.10)',
+          cardHi:   '0 2px 6px rgba(20,20,20,0.06), 0 16px 30px -16px rgba(20,20,20,0.18)',
+          pop:      '0 12px 30px -10px rgba(20,20,20,0.18), 0 2px 6px rgba(20,20,20,0.06)',
+        },
+      }
+    }
+  }
+</script>
+<style>
+  html, body { background:#FAFAF8; color:#1A1A1A; }
+  body { font-feature-settings: "ss01","cv11"; -webkit-font-smoothing: antialiased; }
+  /* hide native arrow on selects so we can draw our own */
+  select.ms-select { appearance:none; -webkit-appearance:none; -moz-appearance:none; background-image:none; }
+  /* gentle focus */
+  .focus-ring:focus { outline:none; box-shadow: 0 0 0 3px rgba(224,122,95,0.18); border-color:#E07A5F; }
+  /* slide-in cart */
+  @keyframes slideIn { from { transform: translateX(24px); opacity:0 } to { transform:none; opacity:1 } }
+  .anim-in { animation: slideIn .22s ease-out both; }
+  @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+  .fade-in { animation: fadeIn .18s ease-out both; }
+  @keyframes pop { 0%{transform:scale(.6);opacity:0} 60%{transform:scale(1.1);opacity:1} 100%{transform:scale(1);opacity:1} }
+  .pop { animation: pop .35s cubic-bezier(.2,.8,.2,1) both; }
+  /* product image placeholder swatches use CSS for stripes */
+  .swatch-stripe {
+    background-image: repeating-linear-gradient( 45deg, rgba(255,255,255,.35) 0 2px, transparent 2px 10px );
+  }
+  /* hide scrollbar on category rail */
+  .no-scrollbar::-webkit-scrollbar { display:none; }
+  .no-scrollbar { scrollbar-width: none; }
+</style>
+</head>
+<body class="font-sans">
+<div id="root"></div>
+
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* ---------- tiny inline icons (stroke = currentColor) ---------- */
+const Icon = ({ name, size = 16, className = "" }) => {
+  const s = size;
+  const common = { width:s, height:s, viewBox:"0 0 24 24", fill:"none", stroke:"currentColor", strokeWidth:1.6, strokeLinecap:"round", strokeLinejoin:"round", className };
+  switch(name){
+    case "logo": return (
+      <svg {...common} viewBox="0 0 24 24"><path d="M4 8h16l-1.4 9.2A2 2 0 0 1 16.6 19H7.4a2 2 0 0 1-2-1.8L4 8Z"/><path d="M8 8V6a4 4 0 0 1 8 0v2"/><circle cx="9.5" cy="12.5" r=".8" fill="currentColor" stroke="none"/><circle cx="14.5" cy="12.5" r=".8" fill="currentColor" stroke="none"/></svg>
+    );
+    case "gear": return (
+      <svg {...common}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1A2 2 0 1 1 4.3 17l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 1 1 7 4.3l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1A2 2 0 1 1 19.7 7l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+    );
+    case "chevron": return (<svg {...common}><path d="m6 9 6 6 6-6"/></svg>);
+    case "right": return (<svg {...common}><path d="m9 6 6 6-6 6"/></svg>);
+    case "bag": return (<svg {...common}><path d="M6 7h12l-1 12a2 2 0 0 1-2 1.8H9a2 2 0 0 1-2-1.8L6 7Z"/><path d="M9 7V5a3 3 0 1 1 6 0v2"/></svg>);
+    case "search": return (<svg {...common}><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>);
+    case "plus": return (<svg {...common}><path d="M12 5v14M5 12h14"/></svg>);
+    case "check": return (<svg {...common}><path d="M5 12.5 9.5 17 19 7"/></svg>);
+    case "x": return (<svg {...common}><path d="m6 6 12 12M18 6 6 18"/></svg>);
+    case "minus": return (<svg {...common}><path d="M5 12h14"/></svg>);
+    case "arrow": return (<svg {...common}><path d="M5 12h14M13 6l6 6-6 6"/></svg>);
+    case "spark": return (<svg {...common}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></svg>);
+    case "instagram": return (<svg {...common}><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r=".6" fill="currentColor" stroke="none"/></svg>);
+    case "twitter": return (<svg {...common}><path d="M4 4h4l5 7 5-7h2l-6.5 9L21 20h-4l-5.2-7.3L6 20H4l7-9.6L4 4Z" fill="currentColor" stroke="none"/></svg>);
+    case "youtube": return (<svg {...common}><rect x="2.5" y="6" width="19" height="12" rx="3"/><path d="m11 9.5 4 2.5-4 2.5v-5Z" fill="currentColor" stroke="none"/></svg>);
+    case "github": return (<svg {...common}><path d="M12 3a9 9 0 0 0-2.85 17.55c.45.08.62-.2.62-.43v-1.5c-2.5.55-3.03-1.2-3.03-1.2-.42-1.05-1.02-1.33-1.02-1.33-.83-.57.06-.56.06-.56.92.07 1.4.95 1.4.95.82 1.4 2.15 1 2.68.77.08-.6.32-1 .58-1.24-2-.23-4.1-1-4.1-4.45 0-.98.35-1.78.92-2.4-.1-.23-.4-1.15.08-2.4 0 0 .76-.24 2.5.92a8.6 8.6 0 0 1 4.55 0c1.74-1.16 2.5-.92 2.5-.92.5 1.25.18 2.17.09 2.4.57.62.92 1.42.92 2.4 0 3.46-2.1 4.22-4.1 4.45.32.28.6.84.6 1.7v2.52c0 .24.17.52.63.43A9 9 0 0 0 12 3Z"/></svg>);
+    default: return null;
+  }
+};
+
+/* ---------- product seed data ---------- */
+const PRODUCTS = [
+  // testing gear
+  { id:"p1", cat:"Testing gear", name:"Pocket multimeter mk II", price:42, stock:95, swatch:"#E8DCC8", note:"compact bench tool" },
+  { id:"p2", cat:"Testing gear", name:"Continuity probe set", price:18, stock:204, swatch:"#D7C9B8", note:"silicone leads, 1m" },
+  { id:"p3", cat:"Testing gear", name:"Logic analyzer 8-ch", price:79, stock:34, swatch:"#C9D6CC", note:"usb, open source" },
+  { id:"p4", cat:"Testing gear", name:"Bench power supply", price:128, stock:12, swatch:"#E5D9C4", note:"0–30v, 0–5a" },
+  // boards
+  { id:"p5", cat:"Boards & modules", name:"micro dev board r4", price:24, stock:312, swatch:"#D9D0E2", note:"usb-c, 32-bit" },
+  { id:"p6", cat:"Boards & modules", name:"esp wireless module", price:9, stock:0, swatch:"#E0CFC0", note:"wifi + ble" },
+  { id:"p7", cat:"Boards & modules", name:"mini servo driver", price:14, stock:88, swatch:"#CFDDD2", note:"i2c, 16-channel" },
+  { id:"p8", cat:"Boards & modules", name:"oled display 1.3\u201d", price:11, stock:147, swatch:"#E2D6C9", note:"128×64, sh1106" },
+];
+
+const CATEGORIES = ["All categories","Testing gear","Boards & modules","Sensors","Tools","Components"];
+const SORTS = ["Featured","Price: low to high","Price: high to low","Newest","Best selling"];
+
+/* ---------- product image placeholder ---------- */
+const Placeholder = ({ swatch, label, large=false }) => (
+  <div className="relative w-full h-full overflow-hidden rounded-xl swatch-stripe" style={{ backgroundColor: swatch }}>
+    <div className="absolute inset-0 flex items-center justify-center">
+      <div className="px-2.5 py-1 rounded-full bg-paper/80 backdrop-blur-sm text-[10px] tracking-wide text-mute font-mono">
+        {label}
+      </div>
+    </div>
+    {large && <div className="absolute top-3 left-3 w-8 h-8 rounded-full bg-paper/60" />}
+  </div>
+);
+
+/* ---------- pill select ---------- */
+const PillSelect = ({ label, value, onChange, options }) => (
+  <label className="group relative inline-flex items-center">
+    <span className="absolute -top-2 left-3 px-1 bg-paper text-[10px] tracking-wide text-mute uppercase">{label}</span>
+    <select
+      className="ms-select focus-ring pl-4 pr-9 h-10 rounded-full bg-paper border border-line text-sm text-ink hover:border-ink/30 transition cursor-pointer"
+      value={value}
+      onChange={(e)=>onChange(e.target.value)}
+    >
+      {options.map(o=> <option key={o} value={o}>{o}</option>)}
+    </select>
+    <span className="pointer-events-none absolute right-3 text-mute"><Icon name="chevron" size={14}/></span>
+  </label>
+);
+
+/* ---------- nav ---------- */
+const Navbar = ({ cartCount, onOpenCart }) => {
+  const [profile, setProfile] = useState(false);
+  const profileRef = useRef(null);
+  useEffect(()=>{
+    const f = (e)=>{ if(profileRef.current && !profileRef.current.contains(e.target)) setProfile(false); };
+    window.addEventListener('mousedown', f);
+    return ()=> window.removeEventListener('mousedown', f);
+  },[]);
+
+  const links = [
+    { name:"Products",        active:true  },
+    { name:"Orders",          active:false },
+    { name:"Content creator", active:false },
+  ];
+
+  return (
+    <header className="sticky top-0 z-30 bg-paper/85 backdrop-blur border-b border-line">
+      <div className="max-w-7xl mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
+        {/* logo */}
+        <a href="#" className="flex items-center gap-2 group">
+          <span className="w-8 h-8 rounded-lg bg-ink text-paper flex items-center justify-center group-hover:bg-coral transition-colors">
+            <Icon name="logo" size={16}/>
+          </span>
+          <span className="text-[15px] font-medium tracking-tight">microshop</span>
+        </a>
+
+        {/* nav */}
+        <nav className="hidden md:flex items-center gap-1">
+          {links.map(l=>(
+            <a key={l.name} href="#"
+               className={`px-3 py-2 text-sm rounded-full transition ${l.active ? 'text-ink' : 'text-mute hover:text-ink'} relative`}>
+              {l.name.toLowerCase()}
+              {l.active && <span className="absolute left-3 right-3 -bottom-[18px] h-px bg-ink"/>}
+            </a>
+          ))}
+          <a href="#" className="px-3 py-2 text-sm rounded-full text-mute hover:text-ink transition flex items-center gap-1.5">
+            <Icon name="gear" size={14}/> admin
+          </a>
+        </nav>
+
+        {/* right cluster */}
+        <div className="flex items-center gap-2">
+          <button onClick={onOpenCart}
+            className="relative h-10 w-10 grid place-items-center rounded-full hover:bg-line/60 transition text-ink"
+            aria-label="cart">
+            <Icon name="bag" size={18}/>
+            {cartCount > 0 && (
+              <span className="pop absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full bg-coral text-paper text-[10px] font-medium">
+                {cartCount}
+              </span>
+            )}
+          </button>
+
+          <div className="relative" ref={profileRef}>
+            <button
+              onClick={()=>setProfile(v=>!v)}
+              className="flex items-center gap-2 pl-1 pr-2.5 h-10 rounded-full hover:bg-line/60 transition">
+              <span className="w-8 h-8 rounded-full bg-coralBg text-coral grid place-items-center text-xs font-medium">jd</span>
+              <span className="hidden sm:inline text-sm">jamie</span>
+              <Icon name="chevron" size={14} className="text-mute"/>
+            </button>
+            {profile && (
+              <div className="fade-in absolute right-0 mt-2 w-56 rounded-2xl bg-paper border border-line shadow-pop p-1.5">
+                <div className="px-3 py-2.5">
+                  <div className="text-sm font-medium">jamie davies</div>
+                  <div className="text-xs text-mute">jamie@microshop.dev</div>
+                </div>
+                <div className="h-px bg-line my-1"/>
+                {["account settings","payment methods","shipping addresses","sign out"].map(i=>(
+                  <a key={i} href="#" className="block px-3 py-2 text-sm rounded-lg hover:bg-line/60 transition">{i}</a>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};
+
+/* ---------- catalog header ---------- */
+const CatalogHeader = ({ category, setCategory, sort, setSort, query, setQuery, shown, total }) => (
+  <section className="max-w-7xl mx-auto px-6 lg:px-10 pt-12 pb-6">
+    <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+      <div>
+        <div className="flex items-center gap-2 text-xs text-mute mb-3">
+          <span>shop</span><span>/</span><span className="text-ink">store catalog</span>
+        </div>
+        <h1 className="text-[44px] md:text-[56px] leading-[1.02] tracking-tight font-medium">store catalog</h1>
+        <p className="mt-3 text-sm text-mute">showing <span className="text-ink">{shown}</span> of <span className="text-ink">{total}</span> products</p>
+      </div>
+      <div className="flex items-center gap-3">
+        <button className="h-11 px-5 inline-flex items-center gap-2 rounded-full bg-coral text-paper text-sm font-medium shadow-card hover:bg-coralHi hover:-translate-y-px transition">
+          <Icon name="plus" size={16}/> publish product
+        </button>
+      </div>
+    </div>
+
+    <div className="mt-9 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <PillSelect label="category" value={category} onChange={setCategory} options={CATEGORIES}/>
+        <PillSelect label="sort" value={sort} onChange={setSort} options={SORTS}/>
+        <button className="h-10 px-4 rounded-full border border-line text-sm text-mute hover:text-ink hover:border-ink/30 transition">
+          in stock only
+        </button>
+      </div>
+      <div className="relative w-full md:w-72">
+        <Icon name="search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-mute"/>
+        <input
+          value={query}
+          onChange={e=>setQuery(e.target.value)}
+          placeholder="search products"
+          className="focus-ring h-10 w-full pl-10 pr-4 rounded-full bg-paper border border-line text-sm placeholder:text-mute"
+        />
+      </div>
+    </div>
+  </section>
+);
+
+/* ---------- product card ---------- */
+const ProductCard = ({ p, qty, onAdd, onInc, onDec }) => {
+  const [hover, setHover] = useState(false);
+  const out = p.stock === 0;
+  const low = p.stock > 0 && p.stock < 20;
+
+  return (
+    <article
+      onMouseEnter={()=>setHover(true)}
+      onMouseLeave={()=>setHover(false)}
+      className="group relative rounded-2xl bg-paper shadow-card hover:shadow-cardHi hover:-translate-y-1 transition-all duration-200 p-3"
+    >
+      <div className="relative aspect-[4/5] overflow-hidden rounded-xl">
+        <Placeholder swatch={p.swatch} label="product photo" large/>
+        <button
+          aria-label="quick view"
+          className={`absolute top-3 right-3 h-8 w-8 grid place-items-center rounded-full bg-paper/95 text-ink shadow-card transition-all ${hover ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1'}`}>
+          <Icon name="search" size={14}/>
+        </button>
+        {out && (
+          <div className="absolute inset-0 grid place-items-center bg-paper/70 backdrop-blur-[1px]">
+            <div className="px-3 py-1.5 rounded-full bg-ink text-paper text-[11px] tracking-wide">restocking soon</div>
+          </div>
+        )}
+      </div>
+
+      <div className="px-1 pt-4 pb-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-[15px] leading-snug truncate">{p.name}</h3>
+            <p className="text-xs text-mute mt-0.5">{p.note}</p>
+          </div>
+          <div className="text-[15px] text-coral whitespace-nowrap font-medium tabular-nums">${p.price}</div>
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
+          {out ? (
+            <span className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-line/70 text-mute text-[11px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-mute"/> out of stock
+            </span>
+          ) : low ? (
+            <span className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-coralBg text-coralHi text-[11px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-coral"/> only {p.stock} left
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-sageBg text-sage text-[11px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-sage"/> {p.stock} in stock
+            </span>
+          )}
+        </div>
+
+        <div className="mt-4">
+          {qty > 0 ? (
+            <div className="anim-in flex items-center justify-between h-10 rounded-full bg-ink text-paper px-1.5">
+              <button onClick={()=>onDec(p)} className="h-8 w-8 grid place-items-center rounded-full hover:bg-paper/10 transition" aria-label="decrease">
+                <Icon name="minus" size={14}/>
+              </button>
+              <span className="text-sm tabular-nums">{qty} in cart</span>
+              <button onClick={()=>onInc(p)} className="h-8 w-8 grid place-items-center rounded-full hover:bg-paper/10 transition" aria-label="increase">
+                <Icon name="plus" size={14}/>
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={()=>onAdd(p)}
+              disabled={out}
+              className={`w-full h-10 rounded-full text-sm font-medium transition flex items-center justify-center gap-2
+                ${out ? 'bg-line/60 text-mute cursor-not-allowed' : 'bg-ink text-paper hover:bg-coral'}`}
+            >
+              {out ? 'notify me' : 'add to cart'}
+            </button>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+};
+
+/* ---------- newsletter ---------- */
+const Newsletter = () => {
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState("idle"); // idle | error | done
+  const submit = (e) => {
+    e.preventDefault();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setState("error"); return; }
+    setState("done");
+  };
+  return (
+    <section className="max-w-7xl mx-auto px-6 lg:px-10 my-16">
+      <div className="relative overflow-hidden rounded-3xl bg-coralBg p-8 md:p-12">
+        <div className="absolute -right-16 -top-20 w-72 h-72 rounded-full bg-coral/15"/>
+        <div className="absolute -right-8 bottom-0 w-40 h-40 rounded-full bg-coral/10"/>
+
+        <div className="relative grid md:grid-cols-[1fr_auto] gap-8 md:items-center">
+          <div className="max-w-xl">
+            <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-coralHi">
+              <Icon name="spark" size={12}/> field notes
+            </div>
+            <h2 className="mt-3 text-3xl md:text-4xl tracking-tight font-medium">
+              build alongside our community.
+            </h2>
+            <p className="mt-2 text-sm text-mute md:max-w-md">
+              one short letter every other friday — new arrivals, teardown notes, and the occasional discount code.
+            </p>
+          </div>
+
+          <form onSubmit={submit} className="w-full md:w-auto">
+            {state === "done" ? (
+              <div className="anim-in inline-flex items-center gap-3 h-12 px-5 rounded-full bg-paper border border-line">
+                <span className="w-7 h-7 rounded-full bg-sageBg text-sage grid place-items-center"><Icon name="check" size={14}/></span>
+                <span className="text-sm">you're on the list, {email.split('@')[0]}.</span>
+              </div>
+            ) : (
+              <div className={`flex items-center bg-paper rounded-full p-1.5 border ${state==='error'?'border-coral':'border-line'} w-full md:w-[420px] shadow-card`}>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e=>{ setEmail(e.target.value); if(state==='error') setState('idle'); }}
+                  placeholder="you@example.com"
+                  className="flex-1 px-4 h-9 bg-transparent outline-none text-sm placeholder:text-mute"
+                />
+                <button className="h-9 px-5 rounded-full bg-coral text-paper text-sm font-medium hover:bg-coralHi transition flex items-center gap-2">
+                  subscribe <Icon name="arrow" size={14}/>
+                </button>
+              </div>
+            )}
+            {state === "error" && <p className="mt-2 ml-2 text-xs text-coralHi">that doesn't look like a valid email.</p>}
+          </form>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+/* ---------- footer ---------- */
+const Footer = () => {
+  const cols = [
+    { title:"shop",    items:["all products","new this week","bundles","gift cards"] },
+    { title:"help",    items:["shipping","returns","warranty","contact us"] },
+    { title:"company", items:["our story","careers","press","wholesale"] },
+  ];
+  return (
+    <footer className="border-t border-line">
+      <div className="max-w-7xl mx-auto px-6 lg:px-10 py-14">
+        <div className="grid md:grid-cols-[1.2fr_1fr_1fr_1fr] gap-10">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-lg bg-ink text-paper grid place-items-center"><Icon name="logo" size={16}/></span>
+              <span className="text-[15px] font-medium tracking-tight">microshop</span>
+            </div>
+            <p className="mt-4 text-sm text-mute leading-relaxed max-w-xs">
+              tools and parts for the patient builder. shipped from a small workshop in lisbon.
+            </p>
+            <div className="mt-5 flex items-center gap-2">
+              {["instagram","twitter","youtube","github"].map(n=>(
+                <a key={n} href="#" aria-label={n} className="w-9 h-9 grid place-items-center rounded-full border border-line text-mute hover:text-ink hover:border-ink/30 transition">
+                  <Icon name={n} size={14}/>
+                </a>
+              ))}
+            </div>
+          </div>
+          {cols.map(c=>(
+            <div key={c.title}>
+              <div className="text-[11px] uppercase tracking-[0.16em] text-mute mb-4">{c.title}</div>
+              <ul className="space-y-3">
+                {c.items.map(i=>(
+                  <li key={i}><a href="#" className="text-sm text-ink/85 hover:text-coral transition">{i}</a></li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-12 pt-6 border-t border-line flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-xs text-mute">
+          <div>© 2026 microshop. a tiny independent storefront.</div>
+          <div className="flex items-center gap-5">
+            <a href="#" className="hover:text-ink">privacy</a>
+            <a href="#" className="hover:text-ink">terms</a>
+            <a href="#" className="hover:text-ink">accessibility</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+};
+
+/* ---------- cart drawer ---------- */
+const CartDrawer = ({ open, onClose, items, products, inc, dec, remove }) => {
+  const lines = Object.entries(items).map(([id,qty])=>{
+    const p = products.find(x=>x.id===id);
+    return p ? { ...p, qty } : null;
+  }).filter(Boolean);
+  const subtotal = lines.reduce((s,l)=> s + l.price*l.qty, 0);
+
+  return (
+    <div className={`fixed inset-0 z-50 ${open?'':'pointer-events-none'}`}>
+      <div onClick={onClose} className={`absolute inset-0 bg-ink/30 transition-opacity ${open?'opacity-100':'opacity-0'}`}/>
+      <aside className={`absolute right-0 top-0 bottom-0 w-full sm:w-[420px] bg-paper border-l border-line shadow-pop transition-transform duration-300 ${open?'translate-x-0':'translate-x-full'}`}>
+        <div className="h-16 px-5 flex items-center justify-between border-b border-line">
+          <div className="flex items-center gap-2">
+            <Icon name="bag" size={18}/>
+            <span className="text-sm font-medium">your cart</span>
+            <span className="text-xs text-mute">· {lines.reduce((s,l)=>s+l.qty,0)} items</span>
+          </div>
+          <button onClick={onClose} className="h-9 w-9 grid place-items-center rounded-full hover:bg-line/60 transition">
+            <Icon name="x" size={16}/>
+          </button>
+        </div>
+
+        <div className="px-5 py-4 overflow-y-auto" style={{ maxHeight:'calc(100vh - 196px)' }}>
+          {lines.length === 0 ? (
+            <div className="text-center py-20">
+              <div className="w-14 h-14 rounded-full bg-line/60 mx-auto grid place-items-center text-mute"><Icon name="bag" size={20}/></div>
+              <p className="mt-4 text-sm text-mute">nothing here yet.</p>
+              <button onClick={onClose} className="mt-4 text-sm text-coral hover:text-coralHi">browse the catalog →</button>
+            </div>
+          ) : (
+            <ul className="space-y-4">
+              {lines.map(l=>(
+                <li key={l.id} className="flex gap-3">
+                  <div className="w-16 h-20 rounded-lg overflow-hidden flex-shrink-0">
+                    <Placeholder swatch={l.swatch} label="img"/>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-sm leading-snug truncate">{l.name}</div>
+                      <button onClick={()=>remove(l)} className="text-mute hover:text-ink"><Icon name="x" size={14}/></button>
+                    </div>
+                    <div className="text-xs text-mute mt-0.5">{l.note}</div>
+                    <div className="mt-2 flex items-center justify-between">
+                      <div className="inline-flex items-center h-8 rounded-full border border-line">
+                        <button onClick={()=>dec(l)} className="w-8 h-8 grid place-items-center text-mute hover:text-ink"><Icon name="minus" size={12}/></button>
+                        <span className="text-xs w-6 text-center tabular-nums">{l.qty}</span>
+                        <button onClick={()=>inc(l)} className="w-8 h-8 grid place-items-center text-mute hover:text-ink"><Icon name="plus" size={12}/></button>
+                      </div>
+                      <div className="text-sm tabular-nums">${(l.price*l.qty).toFixed(0)}</div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="absolute left-0 right-0 bottom-0 border-t border-line bg-paper p-5">
+          <div className="flex items-center justify-between text-sm mb-1">
+            <span className="text-mute">subtotal</span>
+            <span className="tabular-nums">${subtotal.toFixed(2)}</span>
+          </div>
+          <div className="text-[11px] text-mute mb-4">shipping and taxes calculated at checkout.</div>
+          <button
+            disabled={lines.length===0}
+            className={`w-full h-11 rounded-full text-sm font-medium flex items-center justify-center gap-2 transition
+              ${lines.length===0 ? 'bg-line/60 text-mute' : 'bg-coral text-paper hover:bg-coralHi'}`}>
+            checkout <Icon name="arrow" size={14}/>
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
+};
+
+/* ---------- root ---------- */
+function App(){
+  const [category, setCategory] = useState("All categories");
+  const [sort, setSort]         = useState("Featured");
+  const [query, setQuery]       = useState("");
+  const [cart, setCart]         = useState({}); // id -> qty
+  const [cartOpen, setCartOpen] = useState(false);
+  const [toast, setToast]       = useState(null);
+
+  // filter + sort
+  const filtered = useMemo(() => {
+    let list = PRODUCTS.slice();
+    if (category !== "All categories") list = list.filter(p=>p.cat === category);
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q) || p.note.toLowerCase().includes(q));
+    }
+    switch(sort){
+      case "Price: low to high":  list.sort((a,b)=>a.price-b.price); break;
+      case "Price: high to low":  list.sort((a,b)=>b.price-a.price); break;
+      case "Best selling":        list.sort((a,b)=>b.stock-a.stock); break;
+      default: break;
+    }
+    return list;
+  }, [category, sort, query]);
+
+  // group by category
+  const grouped = useMemo(()=> {
+    const m = new Map();
+    filtered.forEach(p=>{ if(!m.has(p.cat)) m.set(p.cat, []); m.get(p.cat).push(p); });
+    return [...m.entries()];
+  }, [filtered]);
+
+  const cartCount = Object.values(cart).reduce((s,n)=>s+n,0);
+
+  const flashToast = (msg) => {
+    setToast(msg);
+    window.clearTimeout(flashToast._t);
+    flashToast._t = window.setTimeout(()=>setToast(null), 1800);
+  };
+
+  const add  = (p) => { setCart(c => ({...c, [p.id]: (c[p.id]||0)+1 })); flashToast(`added “${p.name}”`); };
+  const inc  = (p) => setCart(c => ({...c, [p.id]: Math.min((c[p.id]||0)+1, p.stock || 99) }));
+  const dec  = (p) => setCart(c => {
+    const n = (c[p.id]||0) - 1;
+    const next = {...c};
+    if (n <= 0) delete next[p.id]; else next[p.id] = n;
+    return next;
+  });
+  const remove = (p) => setCart(c => { const n={...c}; delete n[p.id]; return n; });
+
+  return (
+    <>
+      <Navbar cartCount={cartCount} onOpenCart={()=>setCartOpen(true)} />
+
+      <main>
+        <CatalogHeader
+          category={category} setCategory={setCategory}
+          sort={sort} setSort={setSort}
+          query={query} setQuery={setQuery}
+          shown={filtered.length} total={118}
+        />
+
+        <section className="max-w-7xl mx-auto px-6 lg:px-10 pb-8">
+          {grouped.length === 0 && (
+            <div className="text-center py-24 border border-dashed border-line rounded-2xl">
+              <div className="text-sm text-mute">no products match those filters.</div>
+              <button onClick={()=>{ setCategory("All categories"); setQuery(""); }}
+                className="mt-3 text-sm text-coral hover:text-coralHi">clear filters</button>
+            </div>
+          )}
+
+          {grouped.map(([cat, list])=>(
+            <div key={cat} className="mb-12">
+              <div className="flex items-end justify-between gap-4 mb-5">
+                <div className="flex items-baseline gap-3">
+                  <h2 className="text-lg tracking-tight font-medium">{cat.toLowerCase()}</h2>
+                  <span className="text-xs text-mute">{list.length} item{list.length===1?'':'s'}</span>
+                </div>
+                <a href="#" className="text-xs text-mute hover:text-ink inline-flex items-center gap-1 transition">
+                  view all <Icon name="right" size={12}/>
+                </a>
+              </div>
+              <div className="h-px bg-line mb-6"/>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                {list.map(p => (
+                  <ProductCard key={p.id} p={p} qty={cart[p.id]||0} onAdd={add} onInc={inc} onDec={dec}/>
+                ))}
+              </div>
+            </div>
+          ))}
+        </section>
+
+        <Newsletter/>
+      </main>
+
+      <Footer/>
+
+      <CartDrawer
+        open={cartOpen} onClose={()=>setCartOpen(false)}
+        items={cart} products={PRODUCTS}
+        inc={inc} dec={dec} remove={remove}
+      />
+
+      {/* tiny toast */}
+      <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-40 transition-all ${toast?'opacity-100 translate-y-0':'opacity-0 translate-y-2 pointer-events-none'}`}>
+        <div className="anim-in inline-flex items-center gap-2 h-10 px-4 rounded-full bg-ink text-paper shadow-pop">
+          <span className="w-5 h-5 rounded-full bg-coral grid place-items-center"><Icon name="check" size={12}/></span>
+          <span className="text-xs">{toast}</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

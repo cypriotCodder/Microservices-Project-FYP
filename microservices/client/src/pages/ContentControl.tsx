@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
-import { Navbar } from '../components/Navbar';
 import { fetchFromAPI } from '../api/client';
-import '../styles/main.css';
+import { Icon } from '../components/Icon';
 
 const ContentControl: React.FC = () => {
-    const [targetUrl, setTargetUrl] = useState<string>('http://api-gateway:8080');
     const [lengthText, setLengthText] = useState<string>('2 short sentences');
     const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [isLoadingProduct, setIsLoadingProduct] = useState(false);
@@ -21,7 +19,7 @@ const ContentControl: React.FC = () => {
                 setStatusMessage({ type: 'success', text: `Generating product ${i + 1} of ${generateCount}...` });
                 await fetchFromAPI('/content/generate-product', {
                     method: 'POST',
-                    body: JSON.stringify({ targetUrl, lengthText })
+                    body: JSON.stringify({ lengthText })
                 });
                 successCount++;
             }
@@ -39,7 +37,6 @@ const ContentControl: React.FC = () => {
         try {
             const response = await fetchFromAPI('/content/generate-review', {
                 method: 'POST',
-                body: JSON.stringify({ targetUrl })
             });
             setStatusMessage({ type: 'success', text: `✓ Review created! Rating: ${response.data.rating}/5` });
         } catch (error: any) {
@@ -63,56 +60,28 @@ const ContentControl: React.FC = () => {
         }
     };
 
-    const selectStyle: React.CSSProperties = {
-        width: '100%',
-        padding: '0.75rem',
-        backgroundColor: '#333',
-        color: 'white',
-        border: '1px solid #444',
-        borderRadius: '4px',
-        fontSize: '0.95rem',
-        cursor: 'pointer',
-        outline: 'none',
-    };
-
-    const labelStyle: React.CSSProperties = {
-        display: 'block',
-        marginBottom: '0.5rem',
-        color: 'var(--text-secondary)',
-        fontSize: '0.9rem',
-    };
-
     return (
-        <div>
-            <Navbar />
-            <div className="container" style={{ maxWidth: '800px' }}>
-                <h1 className="page-title">Content Generator</h1>
+        <div className="max-w-3xl mx-auto px-6 lg:px-10 py-12">
+            <div className="mb-10 animate-slideIn">
+                <div className="flex items-center gap-2 text-xs text-mute mb-3">
+                    <span>admin</span><span>/</span><span className="text-ink">content generator</span>
+                </div>
+                <h1 className="text-4xl tracking-tight font-medium">Content Generator</h1>
+            </div>
 
-                {/* Configuration Card */}
-                <div className="card" style={{ marginBottom: '2rem' }}>
-                    <h2 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-                        Configuration
-                    </h2>
+            <div className="rounded-3xl bg-paper shadow-card border border-line p-8 animate-slideIn" style={{ animationDelay: '0.1s' }}>
+                <h2 className="text-lg font-medium mb-6 flex items-center gap-2">
+                    <Icon name="gear" size={18} /> Configuration
+                </h2>
 
-                    <div style={{ display: 'grid', gap: '1.25rem', gridTemplateColumns: '1fr 1fr', marginBottom: '1.5rem' }}>
-                        <div>
-                            <label style={labelStyle}>Target Environment</label>
-                            <select
-                                value={targetUrl}
-                                onChange={(e) => setTargetUrl(e.target.value)}
-                                style={selectStyle}
-                            >
-                                <option value="http://api-gateway:8080">Microservices (Docker Internal)</option>
-                                <option value="http://host.docker.internal:4000">Monolith (via Host)</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label style={labelStyle}>Description Length</label>
+                <div className="grid sm:grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <label className="block text-[11px] uppercase tracking-wider text-mute mb-2 ml-1">Description Length</label>
+                        <div className="relative">
                             <select
                                 value={lengthText}
                                 onChange={(e) => setLengthText(e.target.value)}
-                                style={selectStyle}
+                                className="appearance-none focus-ring w-full h-11 pl-4 pr-10 rounded-full bg-paper border border-line text-sm text-ink hover:border-ink/30 transition cursor-pointer"
                             >
                                 <option value="1 short sentence">Microsnap (1 Sentence)</option>
                                 <option value="2 short sentences">Standard (2 Sentences)</option>
@@ -120,19 +89,22 @@ const ContentControl: React.FC = () => {
                                 <option value="2 large paragraphs of marketing copy">Deep Dive (2 Paragraphs)</option>
                                 <option value="an extremely long and brutally detailed 5-page SEO blog post covering every possible specification and marketing copy angle">Maximum (SEO Article)</option>
                             </select>
+                            <Icon name="chevron" size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-mute pointer-events-none" />
                         </div>
                     </div>
 
-                    <div style={{ marginBottom: '1.5rem' }}>
-                        <label style={labelStyle}>Batch Size: <strong style={{ color: 'var(--text-color)' }}>{generateCount}</strong></label>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div>
+                        <label className="block text-[11px] uppercase tracking-wider text-mute mb-2 ml-1">
+                            Batch Size: <span className="font-bold text-ink">{generateCount}</span>
+                        </label>
+                        <div className="flex items-center gap-4 mt-1">
                             <input
                                 type="range"
                                 min="1"
                                 max="50"
                                 value={generateCount}
                                 onChange={(e) => setGenerateCount(parseInt(e.target.value) || 1)}
-                                style={{ flex: 1, cursor: 'pointer', accentColor: 'var(--accent-color)' }}
+                                className="flex-1 accent-coral"
                             />
                             <input
                                 type="number"
@@ -140,110 +112,57 @@ const ContentControl: React.FC = () => {
                                 max="50"
                                 value={generateCount}
                                 onChange={(e) => setGenerateCount(parseInt(e.target.value) || 1)}
-                                style={{
-                                    width: '70px',
-                                    padding: '0.5rem',
-                                    backgroundColor: '#333',
-                                    color: 'white',
-                                    border: '1px solid #444',
-                                    borderRadius: '4px',
-                                    textAlign: 'center',
-                                    fontSize: '1rem',
-                                    fontWeight: 'bold',
-                                }}
+                                className="focus-ring w-16 h-11 text-center rounded-full bg-paper border border-line text-sm"
                             />
                         </div>
                     </div>
-
-                    {/* Action Buttons */}
-                    <div style={{ display: 'flex', gap: '1rem' }}>
-                        <button
-                            className="btn"
-                            onClick={handleCreateProduct}
-                            disabled={isLoadingProduct}
-                            style={{
-                                flex: 1,
-                                backgroundColor: isLoadingProduct ? '#555' : 'var(--accent-color)',
-                                cursor: isLoadingProduct ? 'not-allowed' : 'pointer',
-                                transition: 'background-color 0.2s',
-                            }}
-                        >
-                            {isLoadingProduct ? `Generating... (${generateCount})` : `Generate ${generateCount} Product${generateCount > 1 ? 's' : ''}`}
-                        </button>
-                        <button
-                            className="btn"
-                            onClick={handleCreateReview}
-                            disabled={isLoadingReview}
-                            style={{
-                                flex: 1,
-                                backgroundColor: isLoadingReview ? '#555' : '#4caf50',
-                                cursor: isLoadingReview ? 'not-allowed' : 'pointer',
-                                transition: 'background-color 0.2s',
-                            }}
-                        >
-                            {isLoadingReview ? 'Generating...' : 'Generate Review'}
-                        </button>
-                    </div>
                 </div>
 
-                {/* Status Message */}
-                {statusMessage && (
-                    <div
-                        className="card"
-                        style={{
-                            marginBottom: '2rem',
-                            padding: '1rem 1.5rem',
-                            border: statusMessage.type === 'success'
-                                ? '1px solid rgba(76, 175, 80, 0.5)'
-                                : '1px solid rgba(244, 67, 54, 0.5)',
-                            backgroundColor: statusMessage.type === 'success'
-                                ? 'rgba(76, 175, 80, 0.1)'
-                                : 'rgba(244, 67, 54, 0.1)',
-                        }}
-                    >
-                        <span style={{
-                            color: statusMessage.type === 'success' ? '#4caf50' : '#f44336',
-                            fontWeight: '500',
-                        }}>
-                            {statusMessage.text}
-                        </span>
-                    </div>
-                )}
-
-                {/* Danger Zone */}
-                <div className="card" style={{ border: '1px solid rgba(244, 67, 54, 0.3)' }}>
-                    <h2 style={{
-                        marginBottom: '1rem',
-                        borderBottom: '1px solid var(--border-color)',
-                        paddingBottom: '0.5rem',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                    }}>
-                        Danger Zone
-                        <span style={{ color: '#f44336', fontSize: '0.85rem', fontWeight: 'normal' }}>⚠ Destructive</span>
-                    </h2>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                        Permanently wipe all products from the database and invalidate the Redis cache. This action cannot be undone.
-                    </p>
+                <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-line">
                     <button
-                        className="btn"
-                        onClick={handleDeleteAllProducts}
-                        disabled={isDeleting}
-                        style={{
-                            width: '100%',
-                            backgroundColor: isDeleting ? '#555' : 'rgba(244, 67, 54, 0.15)',
-                            color: isDeleting ? '#999' : '#f44336',
-                            border: '1px solid rgba(244, 67, 54, 0.5)',
-                            cursor: isDeleting ? 'not-allowed' : 'pointer',
-                            transition: 'background-color 0.2s',
-                        }}
-                        onMouseOver={(e) => { if (!isDeleting) e.currentTarget.style.backgroundColor = 'rgba(244, 67, 54, 0.3)'; }}
-                        onMouseOut={(e) => { if (!isDeleting) e.currentTarget.style.backgroundColor = 'rgba(244, 67, 54, 0.15)'; }}
+                        onClick={handleCreateProduct}
+                        disabled={isLoadingProduct}
+                        className={`flex-1 h-11 rounded-full text-sm font-medium transition flex items-center justify-center gap-2
+                            ${isLoadingProduct ? 'bg-line/60 text-mute cursor-not-allowed' : 'bg-ink text-paper hover:bg-coral shadow-card'}`}
                     >
-                        {isDeleting ? 'Deleting All Products...' : 'Delete All Products'}
+                        {isLoadingProduct ? `Generating... (${generateCount})` : `Generate ${generateCount} Product${generateCount > 1 ? 's' : ''}`}
+                    </button>
+                    <button
+                        onClick={handleCreateReview}
+                        disabled={isLoadingReview}
+                        className={`flex-1 h-11 rounded-full text-sm font-medium transition flex items-center justify-center gap-2
+                            ${isLoadingReview ? 'bg-line/60 text-mute cursor-not-allowed' : 'bg-sage text-paper hover:bg-sage/80 shadow-card'}`}
+                    >
+                        {isLoadingReview ? 'Generating...' : 'Generate Review'}
                     </button>
                 </div>
+            </div>
+
+            {statusMessage && (
+                <div className={`mt-6 p-4 rounded-2xl border flex items-center gap-3 animate-fadeIn
+                    ${statusMessage.type === 'success' ? 'bg-sageBg text-sage border-sage/20' : 'bg-coralBg text-coralHi border-coral/20'}`}
+                >
+                    <Icon name={statusMessage.type === 'success' ? 'check' : 'x'} size={18} />
+                    <span className="text-sm font-medium">{statusMessage.text}</span>
+                </div>
+            )}
+
+            <div className="mt-8 rounded-3xl bg-coralBg/30 border border-coral/20 p-8 animate-slideIn" style={{ animationDelay: '0.2s' }}>
+                <h2 className="text-lg font-medium text-coralHi mb-2 flex items-center justify-between">
+                    Danger Zone
+                    <span className="text-[11px] uppercase tracking-wider px-2 py-1 rounded-full bg-coral/10">⚠ Destructive</span>
+                </h2>
+                <p className="text-sm text-coralHi/80 mb-6">
+                    Permanently wipe all products from the database and invalidate the Redis cache. This action cannot be undone.
+                </p>
+                <button
+                    onClick={handleDeleteAllProducts}
+                    disabled={isDeleting}
+                    className={`w-full h-11 rounded-full text-sm font-medium transition flex items-center justify-center
+                        ${isDeleting ? 'bg-coralBg text-coralHi/50 cursor-not-allowed border border-coral/20' : 'bg-coralBg text-coralHi border border-coral/30 hover:bg-coral/10'}`}
+                >
+                    {isDeleting ? 'Deleting All Products...' : 'Delete All Products'}
+                </button>
             </div>
         </div>
     );

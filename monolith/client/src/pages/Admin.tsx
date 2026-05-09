@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Navbar } from '../components/Navbar';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { fetchFromAPI } from '../api/client';
+import { Icon } from '../components/Icon';
 
 export function Admin() {
     const userStr = localStorage.getItem('user');
@@ -44,11 +44,11 @@ export function Admin() {
         return () => clearTimeout(timerId);
     }, []);
 
-    if (loading) return <div><Navbar /><div className="container" style={{ textAlign: 'center', marginTop: '50px' }}>Loading Admin Dashboard...</div></div>;
-    if (!metrics) return <div><Navbar /><div className="container" style={{ textAlign: 'center', color: 'red', marginTop: '50px' }}>Failed to load Admin Dashboard. Check Server/Role permissions.</div></div>;
+    if (loading) return <div className="text-center py-32 text-mute">loading dashboard...</div>;
+    if (!metrics) return <div className="text-center py-32 text-coralHi">failed to load dashboard. check server/role permissions.</div>;
 
     const chartTelemetry = [
-        { name: 'Last 60s Average', LatencyMs: metrics.telemetry.avgLatencyMs, '4xx Errors': metrics.telemetry.errorRate4xx, '5xx Errors': metrics.telemetry.errorRate5xx }
+        { name: 'Last 60s Avg', LatencyMs: metrics.telemetry.avgLatencyMs, '4xx Errors': metrics.telemetry.errorRate4xx, '5xx Errors': metrics.telemetry.errorRate5xx }
     ];
 
     const chartOrders = metrics.chartData.map((d: any) => ({
@@ -57,93 +57,101 @@ export function Admin() {
     }));
 
     return (
-        <div>
-            <Navbar />
-            <div className="container" style={{ marginTop: '2rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h1 style={{ fontSize: '2rem', marginBottom: '1.5rem', borderBottom: '2px solid var(--accent-color)', paddingBottom: '0.5rem', display: 'inline-block' }}>System Admin Dashboard</h1>
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Last updated: {lastUpdated}</span>
+        <div className="max-w-7xl mx-auto px-6 lg:px-10 py-12">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 mb-10 animate-slideIn">
+                <div>
+                    <div className="flex items-center gap-2 text-xs text-mute mb-3">
+                        <span>admin</span><span>/</span><span className="text-ink">dashboard</span>
+                    </div>
+                    <h1 className="text-4xl tracking-tight font-medium">System Overview</h1>
                 </div>
-
-                {/* KPI Cards */}
-                <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
-                    <div style={{ flex: 1, backgroundColor: 'var(--card-bg)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border-color)', textAlign: 'center' }}>
-                        <h3 style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.5rem' }}>Total System Users</h3>
-                        <p style={{ fontSize: '2.5rem', fontWeight: 'bold', margin: '0', color: 'var(--accent-color)' }}>{metrics.users}</p>
-                    </div>
-                    <div style={{ flex: 1, backgroundColor: 'var(--card-bg)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border-color)', textAlign: 'center' }}>
-                        <h3 style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.5rem' }}>Total Orders Processed</h3>
-                        <p style={{ fontSize: '2.5rem', fontWeight: 'bold', margin: '0', color: 'var(--accent-color)' }}>{metrics.orders}</p>
-                    </div>
-                    <div style={{ flex: 1, backgroundColor: 'var(--card-bg)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border-color)', textAlign: 'center' }}>
-                        <h3 style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.5rem' }}>Total System Revenue</h3>
-                        <p style={{ fontSize: '2.5rem', fontWeight: 'bold', margin: '0', color: 'var(--accent-color)' }}>${metrics.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    </div>
+                <div className="text-xs text-mute font-medium px-4 py-2 rounded-full bg-paper border border-line shadow-sm">
+                    Last updated: {lastUpdated}
                 </div>
+            </div>
 
-                <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+            <div className="grid md:grid-cols-3 gap-6 mb-8 animate-slideIn" style={{ animationDelay: '0.1s' }}>
+                <div className="p-6 rounded-3xl bg-paper shadow-card border border-line text-center">
+                    <div className="text-[11px] uppercase tracking-wider text-mute mb-2 flex items-center justify-center gap-2">
+                        <Icon name="search" size={12} /> Total Users
+                    </div>
+                    <div className="text-4xl font-medium tabular-nums">{metrics.users}</div>
+                </div>
+                <div className="p-6 rounded-3xl bg-sageBg border border-sage/20 text-center shadow-sm">
+                    <div className="text-[11px] uppercase tracking-wider text-sage mb-2 flex items-center justify-center gap-2">
+                        <Icon name="bag" size={12} /> Orders Processed
+                    </div>
+                    <div className="text-4xl font-medium tabular-nums text-sage">{metrics.orders}</div>
+                </div>
+                <div className="p-6 rounded-3xl bg-coralBg border border-coral/20 text-center shadow-sm">
+                    <div className="text-[11px] uppercase tracking-wider text-coralHi mb-2 flex items-center justify-center gap-2">
+                        <Icon name="spark" size={12} /> System Revenue
+                    </div>
+                    <div className="text-4xl font-medium tabular-nums text-coralHi">${metrics.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                </div>
+            </div>
 
-                    {/* Charts Section */}
-                    <div style={{ flex: '1 1 60%', minWidth: '400px' }}>
-                        <div style={{ backgroundColor: 'var(--card-bg)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '2rem' }}>
-                            <h3 style={{ marginBottom: '1.5rem', fontSize: '1.2rem', color: 'var(--text-color)' }}>Live Traffic Metrics (Last 60s)</h3>
-                            <div style={{ width: '100%', height: 300 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={chartTelemetry}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                                        <XAxis dataKey="name" stroke="var(--text-secondary)" />
-                                        <YAxis stroke="var(--text-secondary)" />
-                                        <Tooltip contentStyle={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)', color: 'var(--text-color)' }} />
-                                        <Legend />
-                                        <Bar dataKey="LatencyMs" fill="#8884d8" name="Avg Latency (ms)" />
-                                        <Bar dataKey="4xx Errors" fill="#ffc658" name="4xx Error Rate (%)" />
-                                        <Bar dataKey="5xx Errors" fill="#ff7300" name="5xx Server Fault Rate (%)" />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-
-                        <div style={{ backgroundColor: 'var(--card-bg)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '2rem' }}>
-                            <h3 style={{ marginBottom: '1.5rem', fontSize: '1.2rem', color: 'var(--text-color)' }}>Sales Velocity (Orders / Min)</h3>
-                            <div style={{ width: '100%', height: 300 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={chartOrders}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                                        <XAxis dataKey="time" stroke="var(--text-secondary)" />
-                                        <YAxis stroke="var(--text-secondary)" allowDecimals={false} />
-                                        <Tooltip contentStyle={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)', color: 'var(--text-color)' }} />
-                                        <Legend />
-                                        <Bar dataKey="orders" fill="var(--accent-color)" name="Orders per minute" />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
+            <div className="grid lg:grid-cols-[1fr_360px] gap-8 animate-slideIn" style={{ animationDelay: '0.2s' }}>
+                
+                <div className="flex flex-col gap-8">
+                    <div className="p-8 rounded-3xl bg-paper shadow-card border border-line">
+                        <h3 className="text-lg font-medium mb-6">Live Traffic Metrics</h3>
+                        <div className="h-[300px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={chartTelemetry}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#E8E8E4" />
+                                    <XAxis dataKey="name" stroke="#6B6B66" tick={{ fill: '#6B6B66', fontSize: 12 }} />
+                                    <YAxis stroke="#6B6B66" tick={{ fill: '#6B6B66', fontSize: 12 }} />
+                                    <Tooltip contentStyle={{ backgroundColor: '#FAFAF8', borderColor: '#E8E8E4', borderRadius: '12px', fontSize: '13px' }} />
+                                    <Legend wrapperStyle={{ fontSize: '13px' }} />
+                                    <Bar dataKey="LatencyMs" fill="#7FA98B" name="Avg Latency (ms)" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="4xx Errors" fill="#F4A261" name="4xx Error (%)" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="5xx Errors" fill="#E07A5F" name="5xx Fault (%)" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
                         </div>
                     </div>
 
-                    {/* Top Products Table */}
-                    <div style={{ flex: '1 1 30%', minWidth: '300px' }}>
-                        <div style={{ backgroundColor: 'var(--card-bg)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                            <h3 style={{ marginBottom: '1.5rem', fontSize: '1.2rem', color: 'var(--text-color)' }}>Top 10 Product Sales</h3>
-                            <div style={{ display: 'table', width: '100%', borderCollapse: 'collapse' }}>
-                                <div style={{ display: 'table-row', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '0.9rem', textTransform: 'uppercase' }}>
-                                    <div style={{ display: 'table-cell', padding: '0.5rem' }}>Product ID</div>
-                                    <div style={{ display: 'table-cell', padding: '0.5rem', textAlign: 'right' }}>Total Sold</div>
+                    <div className="p-8 rounded-3xl bg-paper shadow-card border border-line">
+                        <h3 className="text-lg font-medium mb-6">Sales Velocity</h3>
+                        <div className="h-[300px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={chartOrders}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#E8E8E4" />
+                                    <XAxis dataKey="time" stroke="#6B6B66" tick={{ fill: '#6B6B66', fontSize: 12 }} />
+                                    <YAxis stroke="#6B6B66" allowDecimals={false} tick={{ fill: '#6B6B66', fontSize: 12 }} />
+                                    <Tooltip contentStyle={{ backgroundColor: '#FAFAF8', borderColor: '#E8E8E4', borderRadius: '12px', fontSize: '13px' }} />
+                                    <Legend wrapperStyle={{ fontSize: '13px' }} />
+                                    <Bar dataKey="orders" fill="#1A1A1A" name="Orders / min" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-8 rounded-3xl bg-paper shadow-cardHi border border-line h-fit">
+                    <h3 className="text-lg font-medium mb-6">Top Products</h3>
+                    <div className="space-y-4">
+                        {metrics.topProducts.map((p: any, idx: number) => (
+                            <div key={p._id} className="flex items-center gap-4 p-3 rounded-2xl hover:bg-line/30 transition">
+                                <div className="w-8 h-8 rounded-full bg-line text-mute grid place-items-center text-xs font-bold">
+                                    {idx + 1}
                                 </div>
-                                {metrics.topProducts.map((p: any) => (
-                                    <div key={p._id} style={{ display: 'table-row', borderBottom: '1px solid var(--border-color)' }}>
-                                        <div style={{ display: 'table-cell', padding: '0.75rem 0.5rem' }}>
-                                            <div style={{ fontWeight: 'bold', color: 'var(--text-color)' }}>{p.name || 'Unknown Item'}</div>
-                                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>ID: {p._id.slice(-6)}</div>
-                                        </div>
-                                        <div style={{ display: 'table-cell', padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 'bold' }}>
-                                            {p.totalSold}
-                                        </div>
-                                    </div>
-                                ))}
+                                <div className="flex-1 min-w-0">
+                                    <div className="font-medium text-sm truncate">{p.name || 'Unknown Item'}</div>
+                                    <div className="text-[10px] text-mute uppercase tracking-widest mt-0.5">ID: {p._id.slice(-6)}</div>
+                                </div>
+                                <div className="text-coralHi font-medium tabular-nums">
+                                    {p.totalSold} <span className="text-[10px] text-mute">sold</span>
+                                </div>
                             </div>
-                        </div>
+                        ))}
+                        {metrics.topProducts.length === 0 && (
+                            <div className="text-sm text-mute text-center py-6">No sales data available.</div>
+                        )}
                     </div>
                 </div>
+
             </div>
         </div>
     );
