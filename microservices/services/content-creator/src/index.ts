@@ -15,14 +15,10 @@ const generator = new ContentGenerator();
 
 // Expose control APIs
 app.post('/generate-product', async (req, res) => {
-    const { targetUrl, lengthText } = req.body;
-
-    if (!targetUrl) {
-        return res.status(400).json({ error: 'targetUrl is required' });
-    }
+    const { lengthText } = req.body;
 
     try {
-        const result = await generator.generateProduct(targetUrl, lengthText || '2 sentences');
+        const result = await generator.generateProduct('', lengthText || '2 sentences');
         res.json({ message: 'Product generated successfully', data: result });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -30,14 +26,8 @@ app.post('/generate-product', async (req, res) => {
 });
 
 app.post('/generate-review', async (req, res) => {
-    const { targetUrl } = req.body;
-
-    if (!targetUrl) {
-        return res.status(400).json({ error: 'targetUrl is required' });
-    }
-
     try {
-        const result = await generator.generateReview(targetUrl);
+        const result = await generator.generateReview('');
         res.json({ message: 'Review generated successfully', data: result });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
