@@ -1,200 +1,92 @@
-:root {
-    --bg-color: #0d0d0d;
-    --card-bg: #1a1a1a;
-    --text-color: #ffffff;
-    --text-secondary: #a1a1aa;
-    --accent-color: #646cff;
-    --accent-hover: #535bf2;
-    --border-color: #333;
-    --success: #10b981;
-    --error: #ef4444;
+@import "tailwindcss";
 
-    --font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+@theme {
+  --color-paper: #FAFAF8;
+  --color-ink: #1A1A1A;
+  --color-line: #E8E8E4;
+  --color-mute: #6B6B66;
+  --color-coral: #E07A5F;
+  --color-coralHi: #D86A4D;
+  --color-coralBg: #FBEDE7;
+  --color-sage: #7FA98B;
+  --color-sageBg: #EAF1EC;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --shadow-card: 0 1px 2px rgba(20, 20, 20, 0.04), 0 4px 14px -8px rgba(20, 20, 20, 0.10);
+  --shadow-cardHi: 0 2px 6px rgba(20, 20, 20, 0.06), 0 16px 30px -16px rgba(20, 20, 20, 0.18);
+  --shadow-pop: 0 12px 30px -10px rgba(20, 20, 20, 0.18), 0 2px 6px rgba(20, 20, 20, 0.06);
+
+  --animate-slideIn: slideIn 0.22s ease-out both;
+  --animate-fadeIn: fadeIn 0.18s ease-out both;
+  --animate-pop: pop 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+  @keyframes slideIn {
+    from {
+      transform: translateX(24px);
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes pop {
+    0% {
+      transform: scale(0.6);
+      opacity: 0;
+    }
+    60% {
+      transform: scale(1.1);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
 }
 
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+html, body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
 }
 
-body {
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    font-family: var(--font-family);
-    line-height: 1.5;
-    font-weight: 400;
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+/* hide native arrow on selects so we can draw our own */
+select.ms-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: none;
 }
 
-a {
-    text-decoration: none;
-    color: inherit;
+/* gentle focus */
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(224, 122, 95, 0.18);
+  border-color: var(--color-coral);
 }
 
-button {
-    cursor: pointer;
-    border: none;
-    outline: none;
-    font-family: inherit;
+/* product image placeholder swatches use CSS for stripes */
+.swatch-stripe {
+  background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.35) 0 2px, transparent 2px 10px);
 }
 
-/* Utilities */
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 2rem;
+/* hide scrollbar on category rail */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
-
-.card {
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 2rem;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-}
-
-.btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background-color: var(--accent-color);
-    color: white;
-    padding: 0.75rem 1.5rem;
-    border-radius: 8px;
-    font-weight: 600;
-    transition: background-color 0.2s;
-}
-
-.btn:hover {
-    background-color: var(--accent-hover);
-}
-
-.btn-summarize {
-    color: black;
-}
-
-.btn-summarize:hover {
-    color: white;
-}
-
-.btn-outline {
-    background-color: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-}
-
-.btn-outline:hover {
-    border-color: var(--accent-color);
-    color: var(--accent-color);
-}
-
-.input {
-    width: 100%;
-    background-color: #000;
-    border: 1px solid var(--border-color);
-    padding: 0.75rem;
-    border-radius: 8px;
-    color: var(--text-color);
-    font-size: 1rem;
-    transition: border-color 0.2s;
-}
-
-.input:focus {
-    border-color: var(--accent-color);
-    outline: none;
-}
-
-.page-title {
-    font-size: 2rem;
-    font-weight: 700;
-    margin-bottom: 2rem;
-    background: linear-gradient(to right, #fff, #666);
-    background-clip: text;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-/* Dropdown Menu */
-.dropdown-container {
-    position: relative;
-    display: inline-block;
-}
-
-.dropdown-menu {
-    position: absolute;
-    top: calc(100% + 10px);
-    right: 0;
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    min-width: 220px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
-    z-index: 1000;
-    overflow: hidden;
-    animation: fadeIn 0.15s ease-out;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.dropdown-header {
-    padding: 1rem;
-    border-bottom: 1px solid var(--border-color);
-    background-color: rgba(255, 255, 255, 0.02);
-}
-
-.dropdown-header-name {
-    font-weight: 600;
-    color: var(--text-color);
-    margin-bottom: 0.25rem;
-    font-size: 1rem;
-}
-
-.dropdown-header-email {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-}
-
-.dropdown-item {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    color: var(--text-color);
-    cursor: pointer;
-    transition: background-color 0.2s;
-    width: 100%;
-    text-align: left;
-    font-size: 0.95rem;
-    background: transparent;
-    border: none;
-}
-
-.dropdown-item:hover {
-    background-color: rgba(255, 255, 255, 0.05);
-}
-
-.dropdown-item.danger {
-    color: var(--error);
-}
-
-.dropdown-item.danger:hover {
-    background-color: rgba(239, 68, 68, 0.1);
-}
-
-.dropdown-divider {
-    height: 1px;
-    background-color: var(--border-color);
-    margin: 0.25rem 0;
+.no-scrollbar {
+  scrollbar-width: none;
 }

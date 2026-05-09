@@ -9,6 +9,8 @@ import ContentControl from './pages/ContentControl';
 import ProductDetails from './pages/ProductDetails';
 import { Admin } from './pages/Admin';
 import { PublishProduct } from './pages/PublishProduct';
+import { CartProvider } from './context/CartContext';
+import { Layout } from './components/Layout';
 import './styles/main.css';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -16,67 +18,30 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  return children;
+  return <Layout>{children}</Layout>;
+}
+
+function PublicRoute({ children }: { children: ReactNode }) {
+  return <Layout>{children}</Layout>;
 }
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/" element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        } />
-        <Route path="/orders" element={
-          <ProtectedRoute>
-            <Orders />
-          </ProtectedRoute>
-        } />
-        <Route
-          path="/traffic"
-          element={
-            <ProtectedRoute>
-              <TrafficControl />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/content"
-          element={
-            <ProtectedRoute>
-              <ContentControl />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/product/:id"
-          element={
-            <ProtectedRoute>
-              <ProductDetails />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute>
-              <Admin />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/publish"
-          element={
-            <ProtectedRoute>
-              <PublishProduct />
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
-    </BrowserRouter>
+    <CartProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
+          <Route path="/traffic" element={<ProtectedRoute><TrafficControl /></ProtectedRoute>} />
+          <Route path="/content" element={<ProtectedRoute><ContentControl /></ProtectedRoute>} />
+          <Route path="/product/:id" element={<ProtectedRoute><ProductDetails /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+          <Route path="/publish" element={<ProtectedRoute><PublishProduct /></ProtectedRoute>} />
+        </Routes>
+      </BrowserRouter>
+    </CartProvider>
   );
 }
 

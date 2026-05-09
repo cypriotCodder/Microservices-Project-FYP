@@ -23,7 +23,7 @@ export const seedProducts = async (req: Request, res: Response) => {
                 description: "Latest smartphone",
                 price: 999,
                 stock: 5, // LOW stock - good for testing 'race conditions'
-                image: "",
+                image: "https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&q=80&w=1000",
                 category: "Electronics"
             },
             {

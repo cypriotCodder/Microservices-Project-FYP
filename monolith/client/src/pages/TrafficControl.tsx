@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Navbar } from '../components/Navbar';
 import { fetchFromAPI } from '../api/client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import '../styles/main.css';
+import { Icon } from '../components/Icon';
 
 interface Trial {
     id: number;
@@ -94,148 +93,156 @@ export function TrafficControl() {
     }));
 
     return (
-        <div>
-            <Navbar />
-            <div className="container" style={{ maxWidth: '800px' }}>
-                <h1 className="page-title">Traffic Generator</h1>
+        <div className="max-w-4xl mx-auto px-6 lg:px-10 py-12">
+            <div className="mb-10 animate-slideIn">
+                <div className="flex items-center gap-2 text-xs text-mute mb-3">
+                    <span>admin</span><span>/</span><span className="text-ink">traffic generator</span>
+                </div>
+                <h1 className="text-4xl tracking-tight font-medium">Traffic Generator</h1>
+            </div>
 
-                <div className="card" style={{ marginBottom: '2rem' }}>
-                    <h2 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>Configuration</h2>
+            <div className="rounded-3xl bg-paper shadow-cardHi border border-line p-8 animate-slideIn" style={{ animationDelay: '0.1s' }}>
+                <h2 className="text-lg font-medium mb-6 flex items-center gap-2">
+                    <Icon name="gear" size={18} /> Configuration
+                </h2>
 
-                    <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr', marginBottom: '1.5rem' }}>
-                        <div>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Target URL</label>
+                <div className="grid sm:grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <label className="block text-[11px] uppercase tracking-wider text-mute mb-2 ml-1">Target URL</label>
+                        <div className="relative">
                             <select
                                 value={targetUrl}
                                 onChange={(e) => setTargetUrl(e.target.value)}
-                                style={{ width: '100%', padding: '0.75rem', backgroundColor: '#333', color: 'white', border: '1px solid #444', borderRadius: '4px' }}
                                 disabled={status?.isRunning}
+                                className="appearance-none focus-ring w-full h-11 pl-4 pr-10 rounded-full bg-paper border border-line text-sm text-ink hover:border-ink/30 transition cursor-pointer disabled:opacity-50"
                             >
-                                <option value="http://host.docker.internal:4000">Monolith Backend (host.docker.internal:4000)</option>
-                                <option value="http://api-gateway:8080">Microservices Backend (api-gateway:8080)</option>
+                                <option value="http://host.docker.internal:4000">Monolith Backend (:4000)</option>
+                                <option value="http://api-gateway:8080">Microservices Backend (:8080)</option>
                             </select>
-                        </div>
-
-                        <div>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Requests Per Second (RPS)</label>
-                            <input
-                                type="number"
-                                value={rps}
-                                onChange={(e) => setRps(Number(e.target.value))}
-                                min="1"
-                                max="1000"
-                                style={{ width: '100%', padding: '0.75rem', backgroundColor: '#333', color: 'white', border: '1px solid #444', borderRadius: '4px' }}
-                                disabled={status?.isRunning}
-                            />
+                            <Icon name="chevron" size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-mute pointer-events-none" />
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '1rem' }}>
-                        <button
-                            className="btn"
-                            onClick={handleStart}
+                    <div>
+                        <label className="block text-[11px] uppercase tracking-wider text-mute mb-2 ml-1">Requests Per Second (RPS)</label>
+                        <input
+                            type="number"
+                            value={rps}
+                            onChange={(e) => setRps(Number(e.target.value))}
+                            min="1"
+                            max="1000"
                             disabled={status?.isRunning}
-                            style={{ flex: 1, backgroundColor: status?.isRunning ? '#555' : '#4caf50', cursor: status?.isRunning ? 'not-allowed' : 'pointer' }}
-                        >
-                            Start Traffic
-                        </button>
-                        <button
-                            className="btn"
-                            onClick={handleStop}
-                            disabled={!status?.isRunning}
-                            style={{ flex: 1, backgroundColor: !status?.isRunning ? '#555' : '#f44336', cursor: !status?.isRunning ? 'not-allowed' : 'pointer' }}
-                        >
-                            Stop Traffic
-                        </button>
+                            className="focus-ring w-full h-11 px-4 rounded-full bg-paper border border-line text-sm placeholder:text-mute transition disabled:opacity-50"
+                        />
                     </div>
                 </div>
 
-                {status && (
-                    <div className="card" style={{ border: status.isRunning ? '1px solid #4caf50' : '1px solid var(--border-color)' }}>
-                        <h2 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
-                            Live Status
-                            <span style={{ color: status.isRunning ? '#4caf50' : '#f44336', fontSize: '1rem' }}>
-                                {status.isRunning ? '● ACTIVE' : '○ STOPPED'}
-                            </span>
-                        </h2>
+                <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-line">
+                    <button
+                        onClick={handleStart}
+                        disabled={status?.isRunning}
+                        className={`flex-1 h-11 rounded-full text-sm font-medium transition flex items-center justify-center gap-2 shadow-card
+                            ${status?.isRunning ? 'bg-line/60 text-mute cursor-not-allowed' : 'bg-sage text-paper hover:bg-sage/80'}`}
+                    >
+                        Start Traffic
+                    </button>
+                    <button
+                        onClick={handleStop}
+                        disabled={!status?.isRunning}
+                        className={`flex-1 h-11 rounded-full text-sm font-medium transition flex items-center justify-center gap-2 shadow-card
+                            ${!status?.isRunning ? 'bg-line/60 text-mute cursor-not-allowed' : 'bg-coral text-paper hover:bg-coralHi'}`}
+                    >
+                        Stop Traffic
+                    </button>
+                </div>
+            </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
-                            <div style={{ padding: '1rem', backgroundColor: '#222', borderRadius: '8px' }}>
-                                <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Total Sent</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{status.metrics.totalRequestsSent}</div>
-                            </div>
-                            <div style={{ padding: '1rem', backgroundColor: 'rgba(76, 175, 80, 0.1)', border: '1px solid rgba(76, 175, 80, 0.3)', borderRadius: '8px' }}>
-                                <div style={{ color: '#4caf50', fontSize: '0.875rem' }}>Successful</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#4caf50' }}>{status.metrics.successfulRequests}</div>
-                            </div>
-                            <div style={{ padding: '1rem', backgroundColor: 'rgba(244, 67, 54, 0.1)', border: '1px solid rgba(244, 67, 54, 0.3)', borderRadius: '8px' }}>
-                                <div style={{ color: '#f44336', fontSize: '0.875rem' }}>Failed</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f44336' }}>{status.metrics.failedRequests}</div>
-                            </div>
+            {status && (
+                <div className={`mt-8 rounded-3xl p-8 border animate-slideIn ${status.isRunning ? 'bg-sageBg/30 border-sage/30' : 'bg-paper shadow-card border-line'}`} style={{ animationDelay: '0.2s' }}>
+                    <div className="flex items-center justify-between mb-8">
+                        <h2 className="text-lg font-medium">Live Status</h2>
+                        <span className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-medium tracking-wide uppercase
+                            ${status.isRunning ? 'bg-sageBg text-sage border border-sage/20' : 'bg-coralBg text-coralHi border border-coral/20'}
+                        `}>
+                            {status.isRunning ? 'ACTIVE' : 'STOPPED'}
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                        <div className="p-4 rounded-2xl bg-paper border border-line shadow-sm">
+                            <div className="text-[11px] uppercase tracking-wider text-mute mb-1">Total Sent</div>
+                            <div className="text-2xl font-medium tabular-nums">{status.metrics.totalRequestsSent}</div>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-sageBg border border-sage/20 text-sage shadow-sm">
+                            <div className="text-[11px] uppercase tracking-wider mb-1">Successful</div>
+                            <div className="text-2xl font-medium tabular-nums">{status.metrics.successfulRequests}</div>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-coralBg border border-coral/20 text-coral shadow-sm">
+                            <div className="text-[11px] uppercase tracking-wider mb-1">Failed</div>
+                            <div className="text-2xl font-medium tabular-nums">{status.metrics.failedRequests}</div>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
-                {trials.length > 0 && (
-                    <div className="card" style={{ marginTop: '2rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-                            <h2 style={{ margin: 0 }}>Trial History</h2>
-                            <button 
-                                className="btn" 
-                                onClick={() => setTrials([])}
-                                style={{ backgroundColor: '#f44336', padding: '0.5rem 1rem', fontSize: '0.875rem' }}
-                            >
-                                Clear History
-                            </button>
-                        </div>
-                        
-                        <div style={{ height: '300px', width: '100%' }}>
+            {trials.length > 0 && (
+                <div className="mt-8 rounded-3xl bg-paper shadow-cardHi border border-line p-8 animate-slideIn" style={{ animationDelay: '0.3s' }}>
+                    <div className="flex items-center justify-between mb-8 border-b border-line pb-4">
+                        <h2 className="text-lg font-medium">Trial History</h2>
+                        <button 
+                            onClick={() => setTrials([])}
+                            className="text-xs font-medium text-coral hover:text-coralHi transition"
+                        >
+                            Clear History
+                        </button>
+                    </div>
+                    
+                    <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#E8E8E4" />
+                                <XAxis dataKey="id" stroke="#6B6B66" tick={{ fill: '#6B6B66', fontSize: 12 }} tickFormatter={(id) => `Trial ${id}`} />
+                                <YAxis stroke="#6B6B66" tick={{ fill: '#6B6B66', fontSize: 12 }} />
+                                <Tooltip 
+                                    contentStyle={{ backgroundColor: '#FAFAF8', borderColor: '#E8E8E4', borderRadius: '12px', fontSize: '13px' }}
+                                    labelFormatter={(label) => `Trial ${label}`}
+                                    formatter={(value: any, name: any, props: any) => {
+                                        const total = props.payload.success + props.payload.fail;
+                                        const ratio = total > 0 ? ((value as number / total) * 100).toFixed(1) + '%' : '0%';
+                                        return [`${value} (${ratio})`, name === 'success' ? `Success (${props.payload.rps} RPS)` : `Fail (${props.payload.rps} RPS)`];
+                                    }}
+                                />
+                                <Legend wrapperStyle={{ fontSize: '13px' }} />
+                                <Bar dataKey="success" stackId="a" fill="#7FA98B" name="Success" radius={[0, 0, 4, 4]} />
+                                <Bar dataKey="fail" stackId="a" fill="#E07A5F" name="Fail" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                    
+                    <div className="mt-8 pt-8 border-t border-line">
+                        <h3 className="text-sm font-medium text-ink mb-6">Service Failure Breakdown</h3>
+                        <div className="h-[300px] w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                                    <XAxis dataKey="id" stroke="#888" tickFormatter={(id) => `Trial ${id}`} />
-                                    <YAxis stroke="#888" />
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#E8E8E4" />
+                                    <XAxis dataKey="id" stroke="#6B6B66" tick={{ fill: '#6B6B66', fontSize: 12 }} tickFormatter={(id) => `Trial ${id}`} />
+                                    <YAxis stroke="#6B6B66" tick={{ fill: '#6B6B66', fontSize: 12 }} />
                                     <Tooltip 
-                                        contentStyle={{ backgroundColor: '#222', borderColor: '#444' }}
+                                        contentStyle={{ backgroundColor: '#FAFAF8', borderColor: '#E8E8E4', borderRadius: '12px', fontSize: '13px' }}
                                         labelFormatter={(label) => `Trial ${label}`}
-                                        formatter={(value: any, name: any, props: any) => {
-                                            const total = props.payload.success + props.payload.fail;
-                                            const ratio = total > 0 ? ((value as number / total) * 100).toFixed(1) + '%' : '0%';
-                                            return [`${value} (${ratio})`, name === 'success' ? `Success (${props.payload.rps} RPS)` : `Fail (${props.payload.rps} RPS)`];
-                                        }}
+                                        formatter={(value: any, name: any) => [value, name]}
                                     />
-                                    <Legend />
-                                    <Bar dataKey="success" stackId="a" fill="#4caf50" name="Success" />
-                                    <Bar dataKey="fail" stackId="a" fill="#f44336" name="Fail" />
+                                    <Legend wrapperStyle={{ fontSize: '13px' }} />
+                                    <Bar dataKey="auth" stackId="b" fill="#D86A4D" name="Auth" />
+                                    <Bar dataKey="products" stackId="b" fill="#7FA98B" name="Products" />
+                                    <Bar dataKey="llm" stackId="b" fill="#F4A261" name="LLM" />
+                                    <Bar dataKey="orders" stackId="b" fill="#9c27b0" name="Orders" />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
-                        
-                        <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-                            <h3 style={{ marginBottom: '1rem', color: '#ff9800' }}>Service Failure Breakdown</h3>
-                            <div style={{ height: '300px', width: '100%' }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                                        <XAxis dataKey="id" stroke="#888" tickFormatter={(id) => `Trial ${id}`} />
-                                        <YAxis stroke="#888" />
-                                        <Tooltip 
-                                            contentStyle={{ backgroundColor: '#222', borderColor: '#444' }}
-                                            labelFormatter={(label) => `Trial ${label}`}
-                                            formatter={(value: any, name: any) => [value, name]}
-                                        />
-                                        <Legend />
-                                        <Bar dataKey="auth" stackId="b" fill="#e91e63" name="Auth" />
-                                        <Bar dataKey="products" stackId="b" fill="#00bcd4" name="Products" />
-                                        <Bar dataKey="llm" stackId="b" fill="#ff9800" name="LLM" />
-                                        <Bar dataKey="orders" stackId="b" fill="#9c27b0" name="Orders" />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </div>
     );
 }
