@@ -55,6 +55,7 @@ export default function ProductDetails() {
     const [reviewContent, setReviewContent] = useState('');
     const [reviewRating, setReviewRating] = useState(0);
     const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+    const [descExpanded, setDescExpanded] = useState(false);
 
     const { cart, addToCart, incQty, decQty } = useCart();
 
@@ -200,7 +201,22 @@ export default function ProductDetails() {
                     </div>
 
                     <div className="text-mute text-sm leading-relaxed mb-10">
-                        {product.description || 'No description provided for this product.'}
+                        {(() => {
+                            const desc = product.description || 'No description provided for this product.';
+                            const MAX = 200;
+                            if (desc.length <= MAX) return desc;
+                            return (
+                                <>
+                                    {descExpanded ? desc : desc.slice(0, MAX) + '…'}
+                                    <button
+                                        onClick={() => setDescExpanded(!descExpanded)}
+                                        className="ml-1 text-coral hover:text-coralHi font-medium transition"
+                                    >
+                                        {descExpanded ? 'show less' : 'read more'}
+                                    </button>
+                                </>
+                            );
+                        })()}
                     </div>
 
                     <div className="pt-8 border-t border-line">
