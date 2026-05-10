@@ -106,6 +106,8 @@ router.post('/', async (req, res) => {
             data: { name, price: parseFloat(price), description, stock: parseInt(stock) || 0, image, category }
         });
         await redisClient.del('products:all');
+        const paginatedKeys = await redisClient.keys('products:page:*');
+        if (paginatedKeys.length > 0) await redisClient.del(paginatedKeys);
         res.status(201).json({ message: 'Product created', product });
     } catch (error) {
         res.status(500).json({ message: 'Failed to create product', error });

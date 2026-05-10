@@ -96,6 +96,9 @@ app.post('/', async (req, res) => {
     try {
         const product = await Product.create(req.body);
         await redisClient.del('products:all'); // Invalidate cache
+        // Also flush paginated cache keys so the dashboard picks up new products immediately
+        const paginatedKeys = await redisClient.keys('products:page:*');
+        if (paginatedKeys.length > 0) await redisClient.del(paginatedKeys);
         res.status(201).json({ message: 'Product created', product });
     } catch (error) {
         res.status(500).json({ message: 'Failed to create product', error });

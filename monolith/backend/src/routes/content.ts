@@ -80,6 +80,9 @@ router.post('/generate-product', async (req, res) => {
             data: { name, price, description, stock, image: `https://via.placeholder.com/150?text=${encodeURIComponent(name)}`, category: 'Electronics' }
         });
         await redisClient.del('products:all');
+        // Also flush paginated cache keys so the dashboard picks up new products immediately
+        const paginatedKeys = await redisClient.keys('products:page:*');
+        if (paginatedKeys.length > 0) await redisClient.del(paginatedKeys);
         res.status(201).json({ message: 'Product created', data: product });
     } catch (error: any) {
         console.error("Error generating product:", error.message);
