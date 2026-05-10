@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Navbar } from './Navbar';
 import { Footer } from './Footer';
 import { CartDrawer } from './CartDrawer';
-import { useCart } from '../context/CartContext';
+import { useCart, getProductId } from '../context/CartContext';
 import type { Product } from '../context/CartContext';
 import { fetchFromAPI } from '../api/client';
 
@@ -17,7 +17,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       const productIds = Object.keys(cart);
       if (productIds.length === 0) return;
 
-      const toFetch = productIds.filter(id => !productsCache.some(p => String(p.id) === id));
+      const toFetch = productIds.filter(id => !productsCache.some(p => getProductId(p) === id));
       if (toFetch.length === 0) return;
 
       try {
@@ -33,7 +33,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [cart, productsCache]);
 
   const cartItems = Object.entries(cart).map(([id, qty]) => {
-    const product = productsCache.find(p => String(p.id) === id);
+    const product = productsCache.find(p => getProductId(p) === id);
     if (!product) return null;
     return { ...product, qty };
   }).filter(Boolean) as any[];
@@ -47,7 +47,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       const currentUserId = currentUser?.userId || "1";
 
       const totalAmount = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
-      const orderProducts = cartItems.map(item => ({ productId: item.id, quantity: item.qty }));
+      const orderProducts = cartItems.map(item => ({ productId: getProductId(item), quantity: item.qty }));
 
       await fetchFromAPI('/orders', {
         method: 'POST',

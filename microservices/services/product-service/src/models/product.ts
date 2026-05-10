@@ -4,8 +4,8 @@ import mongoose from 'mongoose';
 const ProductSchema = new mongoose.Schema({
     name: { type: String, required: true },
     price: { type: Number, required: true },
-    description: { type: String, required: true },
-    image: { type: String, required: true },
+    description: { type: String, default: '' },
+    image: { type: String, default: 'https://via.placeholder.com/150?text=Product' },
     category: { type: String, required: true },
     stock: { type: Number, required: true },
     createdAt: { type: Date, default: Date.now },

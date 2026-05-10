@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { fetchFromAPI } from '../api/client';
-import { useCart } from '../context/CartContext';
+import { useCart, getProductId } from '../context/CartContext';
 import { Icon } from '../components/Icon';
 
 interface Product {
@@ -62,7 +62,7 @@ export default function ProductDetails() {
         const fetchDetails = async () => {
             try {
                 const prodData = await fetchFromAPI(`/products/${id}`);
-                setProduct({ ...prodData, id: prodData.id || Number(prodData._id) });
+                setProduct(prodData);
                 const reviewData = await fetchFromAPI(`/products/${id}/reviews`);
                 setReviews(Array.isArray(reviewData) ? reviewData : []);
 
@@ -163,7 +163,7 @@ export default function ProductDetails() {
     if (!product) return <div className="text-center py-32 text-coralHi">product not found</div>;
 
     const out = product.stock === 0;
-    const qty = cart[product.id] || 0;
+    const qty = cart[getProductId(product)] || 0;
 
     return (
         <article className="max-w-7xl mx-auto px-6 lg:px-10 py-12 animate-slideIn">

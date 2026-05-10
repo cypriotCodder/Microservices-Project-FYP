@@ -1,14 +1,8 @@
 
 import { Icon } from './Icon';
+import { getProductId } from '../context/CartContext';
+import type { Product } from '../context/CartContext';
 
-interface Product {
-  id: number;
-  name: string;
-  price: number;
-  stock: number;
-  category: string;
-  swatch?: string;
-}
 
 interface CartItem extends Product {
   qty: number;
@@ -63,7 +57,7 @@ export function CartDrawer({ open, onClose, items, inc, dec, remove, onCheckout 
           ) : (
             <ul className="space-y-4">
               {items.map(l => (
-                <li key={l.id} className="flex gap-3">
+                <li key={getProductId(l)} className="flex gap-3">
                   <div className="w-16 h-20 rounded-lg overflow-hidden flex-shrink-0">
                     <Placeholder swatch={l.swatch} label="img" />
                   </div>

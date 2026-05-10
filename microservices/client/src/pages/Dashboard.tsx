@@ -1,19 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchFromAPI } from '../api/client';
-import { useCart } from '../context/CartContext';
+import { useCart, getProductId } from '../context/CartContext';
+import type { Product } from '../context/CartContext';
 import { Icon } from '../components/Icon';
 import { Newsletter } from '../components/Newsletter';
 
-interface Product {
-    id: number;
-    name: string;
-    price: number;
-    stock: number;
-    category: string;
-    swatch?: string;
-    note?: string;
-}
+
 
 const CATEGORIES = ["All categories", "Load Test", "Electronics", "Clothing", "Home", "Books", "Toys", "Sports", "Other"];
 const SORTS = ["Featured", "Price: low to high", "Price: high to low"];
@@ -56,7 +49,7 @@ const ProductCard = ({ p, qty, onAdd, onInc, onDec }: { p: Product, qty: number,
     >
       <div className="relative aspect-[4/5] overflow-hidden rounded-xl">
         <Placeholder swatch={p.swatch} label="product photo" large />
-        <Link to={`/product/${p.id}`}
+        <Link to={`/product/${getProductId(p)}`}
           aria-label="quick view"
           className={`absolute top-3 right-3 h-8 w-8 grid place-items-center rounded-full bg-paper/95 text-ink shadow-card transition-all ${hover ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1'}`}>
           <Icon name="search" size={14} />
@@ -71,7 +64,7 @@ const ProductCard = ({ p, qty, onAdd, onInc, onDec }: { p: Product, qty: number,
       <div className="px-1 pt-4 pb-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <Link to={`/product/${p.id}`} className="hover:underline">
+            <Link to={`/product/${getProductId(p)}`} className="hover:underline">
               <h3 className="text-[15px] leading-snug truncate">{p.name}</h3>
             </Link>
             <p className="text-xs text-mute mt-0.5">{p.note || p.category}</p>
@@ -238,9 +231,9 @@ export function Dashboard() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                       {list.map(p => (
                         <ProductCard 
-                          key={p.id} 
+                          key={getProductId(p)} 
                           p={p} 
-                          qty={cart[p.id] || 0} 
+                          qty={cart[getProductId(p)] || 0} 
                           onAdd={() => addToCart(p)} 
                           onInc={() => incQty(p)} 
                           onDec={() => decQty(p)} 
