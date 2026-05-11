@@ -126,6 +126,7 @@ const ProductCard = ({ p, qty, onAdd, onInc, onDec }: { p: Product, qty: number,
 export function Dashboard() {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
+    const [recProducts, setRecProducts] = useState<Product[]>([]);
 
     const [category, setCategory] = useState("All categories");
     const [sort, setSort] = useState("Featured");
@@ -140,12 +141,28 @@ export function Dashboard() {
     useEffect(() => {
         const loadDashboardData = async () => {
             try {
-                // Since MicroShop does client-side filtering and sorting for the smooth feel, 
-                // we fetch all items (or a large page) and let the UI handle the rest, just like the mock.
                 const prodData = await fetchFromAPI(`/products?page=1&limit=500`);
                 const isPaginated = prodData && typeof prodData === 'object' && !Array.isArray(prodData) && 'products' in prodData;
                 const allProducts: Product[] = isPaginated ? prodData.products : (Array.isArray(prodData) ? prodData : []);
                 setProducts(allProducts);
+
+                // Load personalized recommendations for logged-in user
+                try {
+                    const userStr = localStorage.getItem('user');
+                    const currentUser = userStr ? JSON.parse(userStr) : null;
+                    const userId = currentUser?.userId || '1';
+                    const recData = await fetchFromAPI(`/recommendations/${userId}`);
+                    const recList = recData?.recommendations || [];
+                    const resolved = recList
+                        .map((r: any) => allProducts.find(p => String(p.id) === String(r.productId)))
+                        .filter(Boolean) as Product[];
+                    const seen = new Set<number>();
+                    const deduped = resolved.filter(p => {
+                        if (seen.has(p.id)) return false;
+                        seen.add(p.id); return true;
+                    }).slice(0, 6);
+                    setRecProducts(deduped);
+                } catch { /* recommendations are non-critical */ }
             } catch (err) {
                 console.error("Failed to load products", err);
             } finally {
@@ -300,6 +317,30 @@ export function Dashboard() {
                   className="h-9 px-4 rounded-full border border-line text-sm text-ink hover:border-ink/30 disabled:opacity-30 disabled:cursor-not-allowed transition"
                 >next &rarr;</button>
               </div>
+            )}
+
+            {/* Recommendations strip */}
+            {recProducts.length > 0 && (
+              <section className="max-w-7xl mx-auto px-6 lg:px-10 pb-12">
+                <div className="flex items-center gap-3 mb-6">
+                  <Icon name="spark" size={16} className="text-coral" />
+                  <h2 className="text-lg font-medium tracking-tight">Recommended for You</h2>
+                  <span className="text-xs text-mute">based on your browsing</span>
+                </div>
+                <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
+                  {recProducts.map(p => (
+                    <div key={p.id} className="snap-start flex-shrink-0 w-52">
+                      <ProductCard
+                        p={p}
+                        qty={cart[p.id] || 0}
+                        onAdd={() => addToCart(p)}
+                        onInc={() => incQty(p)}
+                        onDec={() => decQty(p)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </section>
             )}
 
             <Newsletter />
