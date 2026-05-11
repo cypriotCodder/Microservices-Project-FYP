@@ -10,6 +10,7 @@ import { Newsletter } from '../components/Newsletter';
 
 const CATEGORIES = ["All categories", "Load Test", "Electronics", "Clothing", "Home", "Books", "Toys", "Sports", "Other"];
 const SORTS = ["Featured", "Price: low to high", "Price: high to low"];
+const PAGE_SIZE = 20;
 
 const PillSelect = ({ label, value, onChange, options }: { label: string, value: string, onChange: (v: string) => void, options: string[] }) => (
   <label className="group relative inline-flex items-center">
@@ -122,8 +123,12 @@ export function Dashboard() {
     const [category, setCategory] = useState("All categories");
     const [sort, setSort] = useState("Featured");
     const [query, setQuery] = useState("");
+    const [page, setPage] = useState(1);
     
     const { cart, addToCart, incQty, decQty } = useCart();
+
+    // Reset to page 1 whenever filters change
+    useEffect(() => { setPage(1); }, [category, sort, query]);
 
     useEffect(() => {
         const loadDashboardData = async () => {
@@ -160,16 +165,23 @@ export function Dashboard() {
       return list;
     }, [products, category, sort, query]);
 
-    // group by category
+    // pagination
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const paginated = useMemo(() => {
+      const start = (page - 1) * PAGE_SIZE;
+      return filtered.slice(start, start + PAGE_SIZE);
+    }, [filtered, page]);
+
+    // group paginated slice by category
     const grouped = useMemo(() => {
       const m = new Map<string, Product[]>();
-      filtered.forEach(p => { 
+      paginated.forEach(p => { 
         const c = p.category || 'Uncategorized';
         if (!m.has(c)) m.set(c, []); 
         m.get(c)!.push(p); 
       });
       return Array.from(m.entries());
-    }, [filtered]);
+    }, [paginated]);
 
     return (
         <div>
@@ -180,7 +192,7 @@ export function Dashboard() {
                     <span>shop</span><span>/</span><span className="text-ink">store catalog</span>
                   </div>
                   <h1 className="text-[44px] md:text-[56px] leading-[1.02] tracking-tight font-medium">store catalog</h1>
-                  <p className="mt-3 text-sm text-mute">showing <span className="text-ink">{filtered.length}</span> of <span className="text-ink">{products.length}</span> products</p>
+                  <p className="mt-3 text-sm text-mute">showing <span className="text-ink">{Math.min(page * PAGE_SIZE, filtered.length)}</span> of <span className="text-ink">{filtered.length}</span> products &mdash; page <span className="text-ink">{page}</span> of <span className="text-ink">{totalPages}</span></p>
                 </div>
                 <div className="flex items-center gap-3">
                   <Link to="/publish" className="h-11 px-5 inline-flex items-center gap-2 rounded-full bg-coral text-paper text-sm font-medium shadow-card hover:bg-coralHi hover:-translate-y-px transition">
@@ -244,6 +256,44 @@ export function Dashboard() {
                 ))
               )}
             </section>
+
+            {/* Pagination controls */}
+            {!loading && totalPages > 1 && (
+              <div className="max-w-7xl mx-auto px-6 lg:px-10 pb-10 flex items-center justify-center gap-2">
+                <button
+                  onClick={() => { setPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  disabled={page === 1}
+                  className="h-9 px-4 rounded-full border border-line text-sm text-ink hover:border-ink/30 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                >&larr; prev</button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(n => n === 1 || n === totalPages || Math.abs(n - page) <= 2)
+                    .reduce<(number | '...')[]>((acc, n, idx, arr) => {
+                      if (idx > 0 && n - (arr[idx - 1] as number) > 1) acc.push('...');
+                      acc.push(n); return acc;
+                    }, [])
+                    .map((n, i) => n === '...' ? (
+                      <span key={`ellipsis-${i}`} className="w-8 text-center text-mute text-sm">&hellip;</span>
+                    ) : (
+                      <button
+                        key={n}
+                        onClick={() => { setPage(n as number); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        className={`h-9 w-9 rounded-full text-sm transition ${
+                          page === n ? 'bg-ink text-paper' : 'border border-line text-ink hover:border-ink/30'
+                        }`}
+                      >{n}</button>
+                    ))
+                  }
+                </div>
+
+                <button
+                  onClick={() => { setPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  disabled={page === totalPages}
+                  className="h-9 px-4 rounded-full border border-line text-sm text-ink hover:border-ink/30 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                >next &rarr;</button>
+              </div>
+            )}
 
             <Newsletter />
         </div>
