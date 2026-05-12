@@ -24,23 +24,28 @@ app.get('/health', (req, res) => {
 app.get('/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
-        // Simple logic: return recent recommendations for this user
-        // In a real app, this would be complex ML model output stored in DB
+        // Fetch personalized recommendations for this specific user
         const recommendations = await prisma.recommendation.findMany({
             where: { userId },
             orderBy: { score: 'desc' },
             take: 5
         });
 
-        // If no specific recommendations, return default/fallback (mocked for now)
+        // If no personal history yet, fall back to globally trending items
+        // (products clicked most by ANY user — always uses real product IDs)
         if (recommendations.length === 0) {
+            const trending = await prisma.recommendation.findMany({
+                orderBy: { score: 'desc' },
+                take: 5,
+                distinct: ['productId'],
+            });
+
             return res.json({
                 userId,
-                message: "No personalized recommendations yet, showing popular items",
-                recommendations: [
-                    { productId: '101', score: 0.9 },
-                    { productId: '102', score: 0.8 }
-                ]
+                message: trending.length > 0
+                    ? "Showing trending items based on community activity"
+                    : "No recommendations yet — explore the catalog to personalise your feed",
+                recommendations: trending.map(r => ({ productId: r.productId, score: r.score }))
             });
         }
 

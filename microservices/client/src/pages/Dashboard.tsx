@@ -120,6 +120,7 @@ export function Dashboard() {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [recProducts, setRecProducts] = useState<Product[]>([]);
+    const [recMessage, setRecMessage] = useState<string>('');
 
     const [category, setCategory] = useState("All categories");
     const [sort, setSort] = useState("Featured");
@@ -146,6 +147,7 @@ export function Dashboard() {
                     const userId = currentUser?.userId || '1';
                     const recData = await fetchFromAPI(`/recommendations/${userId}`);
                     const recList = recData?.recommendations || [];
+                    setRecMessage(recData?.message || '');
                     // Resolve productIds to full product objects from the already-loaded list
                     const resolved = recList
                         .map((r: any) => allProducts.find(p => getProductId(p) === String(r.productId)))
@@ -316,13 +318,15 @@ export function Dashboard() {
             )}
 
             {/* Recommendations strip */}
-            {recProducts.length > 0 && (
-              <section className="max-w-7xl mx-auto px-6 lg:px-10 pb-12">
-                <div className="flex items-center gap-3 mb-6">
-                  <Icon name="spark" size={16} className="text-coral" />
-                  <h2 className="text-lg font-medium tracking-tight">Recommended for You</h2>
+            <section className="max-w-7xl mx-auto px-6 lg:px-10 pb-12">
+              <div className="flex items-center gap-3 mb-6">
+                <Icon name="spark" size={16} className="text-coral" />
+                <h2 className="text-lg font-medium tracking-tight">Recommended for You</h2>
+                {recProducts.length > 0 && (
                   <span className="text-xs text-mute">based on your browsing</span>
-                </div>
+                )}
+              </div>
+              {recProducts.length > 0 ? (
                 <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
                   {recProducts.map(p => (
                     <div key={getProductId(p)} className="snap-start flex-shrink-0 w-52">
@@ -336,8 +340,16 @@ export function Dashboard() {
                     </div>
                   ))}
                 </div>
-              </section>
-            )}
+              ) : (
+                <div className="flex items-center gap-4 p-5 rounded-2xl border border-dashed border-line bg-paper/50">
+                  <Icon name="spark" size={20} className="text-mute flex-shrink-0" />
+                  <div>
+                    <p className="text-sm text-ink font-medium">Your recommendations will appear here</p>
+                    <p className="text-xs text-mute mt-0.5">Browse and click on products to personalise your feed</p>
+                  </div>
+                </div>
+              )}
+            </section>
 
             <Newsletter />
         </div>
