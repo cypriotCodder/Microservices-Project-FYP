@@ -60,8 +60,13 @@ app.post('/click', async (req, res) => {
     // Endpoint to track user clicks/views on products
     const { userId, productId } = req.body;
     try {
+        // Always coerce to String — auth service returns userId as Int (Postgres),
+        // but the Recommendation schema stores userId as String.
+        const uid = String(userId);
+        const pid = String(productId);
+
         const existingRec = await prisma.recommendation.findFirst({
-            where: { userId, productId }
+            where: { userId: uid, productId: pid }
         });
 
         if (existingRec) {
@@ -74,7 +79,7 @@ app.post('/click', async (req, res) => {
         } else {
             // New interaction gets a score of 1
             const newRec = await prisma.recommendation.create({
-                data: { userId, productId, score: 1 }
+                data: { userId: uid, productId: pid, score: 1 }
             });
             return res.status(201).json(newRec);
         }
