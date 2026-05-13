@@ -58,13 +58,13 @@ echo ""
 DOCKER_CONFIG=$(mktemp -d) /usr/local/bin/docker-compose \
     -f "$SCRIPT_DIR/docker-compose.yml" \
     run --no-deps -T --rm \
+    -v "$SCRIPT_DIR/chaos-loadtest.js:/scripts/chaos-loadtest.js:ro" \
     -e TARGET_URL="$MICROSERVICES_URL" \
     -e ARCH="chaos" \
     k6 run --tag arch=chaos \
            --out influxdb=http://influxdb:8086/k6 \
            --summary-export=/results/results-chaos.json \
-           --stage 30s:20,60s:60,60s:100,60s:100,30s:0 \
-           /scripts/loadtest.js || true
+           /scripts/chaos-loadtest.js || true
 
 K6_CODE=$?
 echo ""
