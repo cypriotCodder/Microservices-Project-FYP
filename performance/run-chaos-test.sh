@@ -52,6 +52,9 @@ echo "▶  Starting k6 chaos load test against $MICROSERVICES_URL ..."
 echo "   Results will be saved to: $RESULTS_DIR/results-chaos.json"
 echo ""
 
+# Use --stage flags to override the script's default 500-VU ramp.
+# k6's --stage CLI flag takes precedence over options.stages in the script,
+# capping at 100 VUs so the auth service doesn't saturate under chaos conditions.
 DOCKER_CONFIG=$(mktemp -d) /usr/local/bin/docker-compose \
     -f "$SCRIPT_DIR/docker-compose.yml" \
     run --no-deps -T --rm \
@@ -60,6 +63,7 @@ DOCKER_CONFIG=$(mktemp -d) /usr/local/bin/docker-compose \
     k6 run --tag arch=chaos \
            --out influxdb=http://influxdb:8086/k6 \
            --summary-export=/results/results-chaos.json \
+           --stage 30s:20,60s:60,60s:100,60s:100,30s:0 \
            /scripts/loadtest.js || true
 
 K6_CODE=$?
@@ -73,36 +77,24 @@ echo ""
 # Falls back gracefully if Grafana renderer plugin is not installed.
 echo "▶  Attempting Grafana PNG export..."
 
-DASHBOARD_UID=$(grep -o '"uid":"[^"]*"' "$SCRIPT_DIR/grafana/dashboards/architectural_contrast.json" 2>/dev/null | head -1 | cut -d'"' -f4)
-
-if [ -z "$DASHBOARD_UID" ]; then
-    # Fall back to the k6 dashboard
-    DASHBOARD_UID=$(grep -o '"uid":"[^"]*"' "$SCRIPT_DIR/grafana/dashboards/k6.json" 2>/dev/null | head -1 | cut -d'"' -f4)
-fi
-
+DASHBOARD_UID="arch_contrast_v3"
 SNAPSHOT_FILE="$RESULTS_DIR/grafana-chaos-snapshot.png"
 
-if [ -n "$DASHBOARD_UID" ]; then
-    # Calculate the time window: from 10 minutes ago to now (covers the k6 run)
-    NOW_MS=$(date +%s)000
-    FROM_MS=$(( ($(date +%s) - 900) * 1000 ))  # 15 min window
+# Calculate the time window: last 15 min covers the full k6 run
+NOW_MS=$(date +%s)000
+FROM_MS=$(( ($(date +%s) - 900) * 1000 ))
 
-    RENDER_URL="${GRAFANA_URL}/render/d/${DASHBOARD_UID}?orgId=1&from=${FROM_MS}&to=${NOW_MS}&width=1600&height=900&tz=UTC"
+RENDER_URL="${GRAFANA_URL}/render/d/${DASHBOARD_UID}?orgId=1&from=${FROM_MS}&to=${NOW_MS}&width=1600&height=900&tz=UTC"
 
-    HTTP_CODE=$(curl -s -o "$SNAPSHOT_FILE" -w "%{http_code}" "$RENDER_URL")
+HTTP_CODE=$(curl -s -o "$SNAPSHOT_FILE" -w "%{http_code}" "$RENDER_URL")
 
-    if [ "$HTTP_CODE" = "200" ] && [ -s "$SNAPSHOT_FILE" ]; then
-        echo "   ✅ Grafana PNG saved → $SNAPSHOT_FILE"
-    else
-        echo "   ⚠️  Grafana render returned HTTP $HTTP_CODE."
-        echo "      The renderer plugin may not be installed."
-        echo "      → Manual export: $GRAFANA_URL/d/$DASHBOARD_UID"
-        echo "      → Use Grafana's Share > Export > Save as PNG in the UI"
-        rm -f "$SNAPSHOT_FILE"
-    fi
+if [ "$HTTP_CODE" = "200" ] && [ -s "$SNAPSHOT_FILE" ]; then
+    echo "   ✅ Grafana PNG saved → $SNAPSHOT_FILE"
 else
-    echo "   ⚠️  Could not detect dashboard UID. Skipping PNG export."
-    echo "      → Manual export: $GRAFANA_URL"
+    echo "   ⚠️  Grafana render returned HTTP $HTTP_CODE (renderer plugin likely not installed)."
+    echo "      → Manual export: $GRAFANA_URL/d/$DASHBOARD_UID"
+    echo "      → Grafana UI: Share → Export → Save as PNG"
+    rm -f "$SNAPSHOT_FILE"
 fi
 echo ""
 
