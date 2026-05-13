@@ -242,6 +242,40 @@ export function Dashboard() {
               </div>
             </section>
 
+            {/* Recommendations strip — above the product grid */}
+            <section className="max-w-7xl mx-auto px-6 lg:px-10 pb-8">
+              <div className="flex items-center gap-3 mb-6">
+                <Icon name="spark" size={16} className="text-coral" />
+                <h2 className="text-lg font-medium tracking-tight">Recommended for You</h2>
+                {recProducts.length > 0 && (
+                  <span className="text-xs text-mute">based on your browsing</span>
+                )}
+              </div>
+              {recProducts.length > 0 ? (
+                <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
+                  {recProducts.map(p => (
+                    <div key={p.id} className="snap-start flex-shrink-0 w-52">
+                      <ProductCard
+                        p={p}
+                        qty={cart[p.id] || 0}
+                        onAdd={() => addToCart(p)}
+                        onInc={() => incQty(p)}
+                        onDec={() => decQty(p)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-4 p-5 rounded-2xl border border-dashed border-line bg-paper/50">
+                  <Icon name="spark" size={20} className="text-mute flex-shrink-0" />
+                  <div>
+                    <p className="text-sm text-ink font-medium">Your recommendations will appear here</p>
+                    <p className="text-xs text-mute mt-0.5">Browse and click on products to personalise your feed</p>
+                  </div>
+                </div>
+              )}
+            </section>
+
             <section className="max-w-7xl mx-auto px-6 lg:px-10 pb-8">
               {loading ? (
                 <div className="text-center py-24 border border-dashed border-line rounded-2xl">
@@ -317,30 +351,6 @@ export function Dashboard() {
                   className="h-9 px-4 rounded-full border border-line text-sm text-ink hover:border-ink/30 disabled:opacity-30 disabled:cursor-not-allowed transition"
                 >next &rarr;</button>
               </div>
-            )}
-
-            {/* Recommendations strip */}
-            {recProducts.length > 0 && (
-              <section className="max-w-7xl mx-auto px-6 lg:px-10 pb-12">
-                <div className="flex items-center gap-3 mb-6">
-                  <Icon name="spark" size={16} className="text-coral" />
-                  <h2 className="text-lg font-medium tracking-tight">Recommended for You</h2>
-                  <span className="text-xs text-mute">based on your browsing</span>
-                </div>
-                <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
-                  {recProducts.map(p => (
-                    <div key={p.id} className="snap-start flex-shrink-0 w-52">
-                      <ProductCard
-                        p={p}
-                        qty={cart[p.id] || 0}
-                        onAdd={() => addToCart(p)}
-                        onInc={() => incQty(p)}
-                        onDec={() => decQty(p)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </section>
             )}
 
             <Newsletter />
