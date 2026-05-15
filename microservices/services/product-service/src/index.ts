@@ -8,6 +8,7 @@ import { seedProducts } from "./controllers/productController";
 import connectDB from './config/db';
 import { connectRedis, redisClient } from './config/redis';
 import { connectToRabbitMQ, consumeOrderBoughtEvents, consumeOrderDeletedEvents, consumeCommentCreatedEvents, publishCommentCreatedEvent } from "./utils/messageBroker";
+import { delByPattern } from './utils/cacheUtils';
 
 dotenv.config();
 
@@ -95,10 +96,9 @@ app.get('/:id', async (req, res) => {
 app.post('/', async (req, res) => {
     try {
         const product = await Product.create(req.body);
-        await redisClient.del('products:all'); // Invalidate cache
-        // Also flush paginated cache keys so the dashboard picks up new products immediately
-        const paginatedKeys = await redisClient.keys('products:page:*');
-        if (paginatedKeys.length > 0) await redisClient.del(paginatedKeys);
+        // Bug #1 fix: products:all was never written — removed that dead del call.
+        // Bug #3 fix: use SCAN-based delByPattern instead of blocking KEYS.
+        await delByPattern('products:page:*');
         res.status(201).json({ message: 'Product created', product });
     } catch (error) {
         res.status(500).json({ message: 'Failed to create product', error });
@@ -109,7 +109,9 @@ app.delete('/all', async (req, res) => {
     try {
         await Product.deleteMany({});
         await Review.deleteMany({}); // Clean up orphaned reviews
-        await redisClient.del('products:all'); // Invalidate cache
+        // Bug #1 fix: products:all was never written — removed that dead del call.
+        // Bug #3 fix: use SCAN-based delByPattern instead of blocking KEYS.
+        await delByPattern('products:page:*');
         res.json({ message: 'All products and reviews seamlessly wiped from database' });
     } catch (error) {
         res.status(500).json({ message: 'Failed to delete products', error });
@@ -174,10 +176,9 @@ app.get('/:productId/comments', async (req, res) => {
 app.delete('/comments/k6', async (req, res) => {
     try {
         const result = await Comment.deleteMany({ content: { $regex: /^k6 / } });
-        // Flush all cached comment lists — keys follow pattern product:<id>:comments:recent
-        const keys = await redisClient.keys('product:*:comments:recent');
-        if (keys.length > 0) await redisClient.del(keys);
-        console.log(`[cleanup] Deleted ${result.deletedCount} k6 test comments, flushed ${keys.length} Redis keys`);
+        // Bug #3 fix: use SCAN-based delByPattern instead of blocking KEYS.
+        await delByPattern('product:*:comments:recent');
+        console.log(`[cleanup] Deleted ${result.deletedCount} k6 test comments, flushed comment cache keys`);
         res.json({ message: `Deleted ${result.deletedCount} k6 test comments` });
     } catch (error) {
         res.status(500).json({ message: 'Failed to delete k6 comments', error });

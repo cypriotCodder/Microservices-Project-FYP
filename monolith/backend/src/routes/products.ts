@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../config/prisma';
 import { redisClient } from '../config/redis';
+import { delByPattern } from '../utils/cacheUtils';
 
 const router = Router();
 
@@ -105,9 +106,9 @@ router.post('/', async (req, res) => {
         const product = await prisma.product.create({
             data: { name, price: parseFloat(price), description, stock: parseInt(stock) || 0, image, category }
         });
-        await redisClient.del('products:all');
-        const paginatedKeys = await redisClient.keys('products:page:*');
-        if (paginatedKeys.length > 0) await redisClient.del(paginatedKeys);
+        // Bug #1 fix: products:all was never written, removed that dead del call.
+        // Bug #3 fix: use SCAN-based delByPattern instead of blocking KEYS.
+        await delByPattern('products:page:*');
         res.status(201).json({ message: 'Product created', product });
     } catch (error) {
         res.status(500).json({ message: 'Failed to create product', error });
@@ -121,7 +122,9 @@ router.delete('/all', async (req, res) => {
         await prisma.orderItem.deleteMany({});
         await prisma.order.deleteMany({});
         await prisma.product.deleteMany({});
-        await redisClient.del('products:all');
+        // Bug #1 fix: removed dead products:all del.
+        // Bug #3 fix: use SCAN-based delByPattern for paginated keys.
+        await delByPattern('products:page:*');
         res.json({ message: 'All products, reviews, and orders seamlessly wiped from database' });
     } catch (error) {
         res.status(500).json({ message: 'Failed to delete products', error });
@@ -160,17 +163,35 @@ router.get('/:productId/reviews', async (req, res) => {
     }
 });
 
-// GET comments for a product (Synchronous read)
+// GET comments for a product
+// Bug #4 fix: serve from Redis List first, fall back to Prisma and warm the cache.
 router.get('/:productId/comments', async (req, res) => {
     try {
         const productId = parseInt(req.params.productId);
         if (isNaN(productId)) return res.status(400).json({ message: 'Invalid product ID' });
 
+        const redisKey = `product:${productId}:comments:recent`;
+        const cached = await redisClient.lRange(redisKey, 0, 49);
+        if (cached.length > 0) {
+            return res.json(cached.map(c => JSON.parse(c)));
+        }
+
+        // Cache miss — fall back to Postgres and warm the Redis List
         const comments = await prisma.comment.findMany({
             where: { productId },
             orderBy: { createdAt: 'desc' },
             take: 50
         });
+
+        if (comments.length > 0) {
+            // Push in reverse so the list ends up in DESC order (newest at index 0)
+            for (const c of [...comments].reverse()) {
+                await redisClient.lPush(redisKey, JSON.stringify(c));
+            }
+            await redisClient.lTrim(redisKey, 0, 49);
+            await redisClient.expire(redisKey, 3600);
+        }
+
         res.json(comments);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching comments', error });
@@ -178,6 +199,7 @@ router.get('/:productId/comments', async (req, res) => {
 });
 
 // POST create comment for a product (Synchronous - intentionally bottlenecked)
+// Bug #4 fix: write-through to Redis List after DB insert.
 router.post('/:productId/comments', async (req, res) => {
     try {
         const productId = parseInt(req.params.productId);
@@ -187,6 +209,13 @@ router.post('/:productId/comments', async (req, res) => {
         const comment = await prisma.comment.create({
             data: { productId, userId: String(userId), content }
         });
+
+        // Write-through to Redis List so reads are served from cache immediately
+        const redisKey = `product:${productId}:comments:recent`;
+        await redisClient.lPush(redisKey, JSON.stringify(comment));
+        await redisClient.lTrim(redisKey, 0, 49); // Keep top 50
+        await redisClient.expire(redisKey, 3600);  // Refresh TTL
+
         res.status(201).json({ message: 'Comment created', comment });
     } catch (error) {
         res.status(500).json({ message: 'Failed to create comment', error });
@@ -196,12 +225,15 @@ router.post('/:productId/comments', async (req, res) => {
 // DELETE all k6 load-test comments (content starts with "k6 ")
 // Called by the k6 teardown() after every test run to keep the DB clean.
 // Only removes synthetic test data — real user comments are untouched.
+// Bug #4 fix: also flush all comment cache keys so stale data is not served.
 router.delete('/comments/k6', async (req, res) => {
     try {
         const result = await prisma.comment.deleteMany({
             where: { content: { startsWith: 'k6 ' } }
         });
-        console.log(`[cleanup] Deleted ${result.count} k6 test comments`);
+        // Flush all comment cache keys — pattern: product:<id>:comments:recent
+        await delByPattern('product:*:comments:recent');
+        console.log(`[cleanup] Deleted ${result.count} k6 test comments, flushed comment cache`);
         res.json({ message: `Deleted ${result.count} k6 test comments` });
     } catch (error) {
         res.status(500).json({ message: 'Failed to delete k6 comments', error });

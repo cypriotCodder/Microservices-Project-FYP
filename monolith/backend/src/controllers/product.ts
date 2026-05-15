@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { prisma } from "../config/prisma";
 import { redisClient } from "../config/redis";
+import { delByPattern } from "../utils/cacheUtils";
+
 
 export const seedProducts = async (req: Request, res: Response) => {
     try {
@@ -8,9 +10,10 @@ export const seedProducts = async (req: Request, res: Response) => {
         //    Without this, the frontend would receive cached products with stale IDs
         //    after the seed deletes and re-inserts with new auto-increment IDs,
         //    causing FK constraint failures when users try to post comments.
-        await redisClient.del('products:all');
-        const individualKeys = await redisClient.keys('product:*');
-        if (individualKeys.length > 0) await redisClient.del(individualKeys);
+        // Bug #1 fix: products:all is never written — removed that dead del call.
+        // Bug #3 fix: use SCAN-based delByPattern instead of blocking KEYS.
+        await delByPattern('products:page:*');
+        await delByPattern('product:*');
 
         // 1. Clear existing data (clean slate for the test)
         await prisma.review.deleteMany({});

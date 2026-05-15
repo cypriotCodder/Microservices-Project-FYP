@@ -15,5 +15,6 @@ export const connectRedis = async () => {
         await redisClient.connect();
     } catch (e) {
         console.error('Failed to connect to Redis', e);
+        process.exit(1); // Hard stop — do not serve traffic without cache layer
     }
 };

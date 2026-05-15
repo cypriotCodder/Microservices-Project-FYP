@@ -2,6 +2,7 @@ import amqp, { Channel, ChannelModel } from "amqplib";
 import { Product } from "../models/product";
 import { Comment } from "../models/comment";
 import { redisClient } from "../config/redis";
+import { delByPattern } from "./cacheUtils";
 
 let connection: ChannelModel | null = null;
 let channel: Channel | null = null;
@@ -86,12 +87,15 @@ export const consumeOrderBoughtEvents = async () => {
               { $inc: { stock: -item.quantity } }
             );
             
-            // Invalidate the cache for this product and the master list
+            // Invalidate the single-product cache for this item
             await redisClient.del(`product:${item.productId}`);
-            await redisClient.del('products:all');
             console.log(`Decremented stock for product ${item.productId} by ${item.quantity}`);
           }
         }
+
+        // Bug #1 fix: products:all was never written — removed that dead del call.
+        // Bug #2 fix: flush paginated keys so the list page shows updated stock immediately.
+        await delByPattern('products:page:*');
 
         // 4. Acknowledge (ack) the message so RabbitMQ removes it from the queue
         channel!.ack(msg);
@@ -189,12 +193,15 @@ export const consumeOrderDeletedEvents = async () => {
               { _id: item.productId },
               { $inc: { stock: item.quantity } }
             );
-            // Invalidate the cache for this product and the master list
+            // Invalidate the single-product cache for this item
             await redisClient.del(`product:${item.productId}`);
-            await redisClient.del('products:all');
             console.log(`Refunded stock for product ${item.productId} by ${item.quantity}`);
           }
         }
+
+        // Bug #1 fix: products:all was never written — removed that dead del call.
+        // Bug #2 fix: flush paginated keys so the list page reflects the refunded stock immediately.
+        await delByPattern('products:page:*');
 
         // 4. Acknowledge (ack) the message so RabbitMQ removes it from the queue
         channel!.ack(msg);

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../config/prisma';
 import { redisClient } from '../config/redis';
 import { requireAuth } from '../middleware/requireAuth';
+import { delByPattern } from '../utils/cacheUtils';
 
 const router = Router();
 
@@ -90,9 +91,6 @@ router.post('/', requireAuth, async (req, res) => {
     const userId = String((req as any).user.sub);
 
     try {
-        // Validate all product IDs exist
-        const productIds: number[] = products.map((p: any) => parseInt(p.productId));
-
         const newOrder = await prisma.order.create({
             data: {
                 userId: String(userId),
@@ -107,6 +105,10 @@ router.post('/', requireAuth, async (req, res) => {
             },
             include: { items: true }
         });
+
+        // Bug #5 fix: invalidate admin metrics immediately on order creation
+        await redisClient.del('admin:metrics');
+        await redisClient.del('admin:metrics_global');
 
         res.status(201).json({ message: 'Order created', order: newOrder });
     } catch (error) {
@@ -139,10 +141,16 @@ router.delete('/:id', requireAuth, async (req, res) => {
                 });
                 await redisClient.del(`product:${item.productId}`);
             }
-            await redisClient.del('products:all');
+            // Bug #1 fix: removed dead products:all del.
+            // Bug #2 fix: flush paginated keys so the list page shows updated stock immediately.
+            await delByPattern('products:page:*');
         }
 
         await prisma.order.delete({ where: { id: orderId } }); // cascade deletes OrderItems
+
+        // Bug #5 fix: invalidate admin metrics on order deletion
+        await redisClient.del('admin:metrics');
+        await redisClient.del('admin:metrics_global');
 
         res.status(200).json({ message: 'Order deleted and stock refunded' });
     } catch (error) {
@@ -176,10 +184,16 @@ router.delete('/all/:userId', requireAuth, async (req, res) => {
             }
         }
         if (stockRefunded) {
-            await redisClient.del('products:all');
+            // Bug #1 fix: removed dead products:all del.
+            // Bug #2 fix: flush paginated keys so list page shows updated stock immediately.
+            await delByPattern('products:page:*');
         }
 
         await prisma.order.deleteMany({ where: { userId } });
+
+        // Bug #5 fix: invalidate admin metrics on bulk order deletion
+        await redisClient.del('admin:metrics');
+        await redisClient.del('admin:metrics_global');
 
         res.status(200).json({ message: 'All orders deleted and stock refunded' });
     } catch (error) {
@@ -225,12 +239,18 @@ router.post('/:id/buy', requireAuth, async (req, res) => {
             });
             await redisClient.del(`product:${item.productId}`);
         }
-        await redisClient.del('products:all');
+        // Bug #1 fix: removed dead products:all del.
+        // Bug #2 fix: flush paginated keys so the list page shows updated stock immediately.
+        await delByPattern('products:page:*');
 
         const updatedOrder = await prisma.order.update({
             where: { id: orderId },
             data: { status: 'COMPLETED' }
         });
+
+        // Bug #5 fix: invalidate admin metrics on checkout (revenue + order count changes)
+        await redisClient.del('admin:metrics');
+        await redisClient.del('admin:metrics_global');
 
         res.status(200).json({ message: 'Order completed and products removed', order: updatedOrder });
     } catch (error) {

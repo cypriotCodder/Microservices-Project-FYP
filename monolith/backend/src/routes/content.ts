@@ -2,6 +2,8 @@ import { Router } from 'express';
 import axios from 'axios';
 import { prisma } from '../config/prisma';
 import { redisClient } from '../config/redis';
+import { delByPattern } from '../utils/cacheUtils';
+
 
 const router = Router();
 
@@ -79,10 +81,9 @@ router.post('/generate-product', async (req, res) => {
         const product = await prisma.product.create({
             data: { name, price, description, stock, image: `https://via.placeholder.com/150?text=${encodeURIComponent(name)}`, category: 'Electronics' }
         });
-        await redisClient.del('products:all');
-        // Also flush paginated cache keys so the dashboard picks up new products immediately
-        const paginatedKeys = await redisClient.keys('products:page:*');
-        if (paginatedKeys.length > 0) await redisClient.del(paginatedKeys);
+        // Bug #1 fix: products:all was never written — removed that dead del call.
+        // Bug #3 fix: use SCAN-based delByPattern instead of blocking KEYS.
+        await delByPattern('products:page:*');
         res.status(201).json({ message: 'Product created', data: product });
     } catch (error: any) {
         console.error("Error generating product:", error.message);
