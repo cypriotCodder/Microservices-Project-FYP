@@ -198,6 +198,10 @@ curl http://localhost:4000/health
 - **Email/Username**: `admin@fyp.com`
 - **Password**: `admin`
 
+**Admin Account Monolith**
+- **Email/Username**: `admin@fyp.com`
+- **Password**: `Admin@123`
+
 These credentials can be used to log into the frontend applications (both Microservices and Monolith) to access administrative features.
 
 ---
@@ -225,3 +229,74 @@ docker-compose --profile chaos up -d --build
 ```
 This forces Pumba into the active Docker socket array. It attaches a continuous `tc netem` 5,000-millisecond delay penalty exactly onto the `llm-service`'s network interface.
 You can cross-reference the Jaeger traces or the Grafana UI under `k6` load and visually watch the API Gateway sever the delayed routes dynamically!
+
+---
+
+## 14. Pre-Presentation Checklist
+
+> **Important:** Only the admin account (`admin@fyp.com`) is auto-seeded on every container start. The 50 k6 test users and products must be seeded **manually** after a fresh database. Users are never deleted by the application — they only disappear when the Postgres Docker volume is wiped (e.g. `docker-compose down -v`).
+
+### Quick Start (Fresh or Existing)
+```bash
+# 1. Start the microservices stack (preserves data if volumes exist)
+cd microservices
+docker-compose up -d --build
+
+# 2. Wait ~15 seconds for Postgres healthcheck + admin auto-seed
+
+# 3. Seed test users (safe to re-run — uses upsert)
+curl -X POST http://localhost:8080/auth/seed-users
+
+# 4. Seed products (safe to re-run)
+curl -X POST http://localhost:8080/products/seed
+
+# 5. Start the monolith stack
+cd ../monolith
+docker-compose up -d --build
+
+# 6. Seed monolith test users and products
+curl -X POST http://localhost:4000/auth/seed-users
+curl -X POST http://localhost:4000/seed
+```
+
+### Verify Everything Works
+```bash
+# Check user count (expect ≥ 51: 1 admin + 50 test users)
+curl http://localhost:3001/admin/users/count
+
+# Verify admin login (microservices)
+curl -X POST http://localhost:8080/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin@fyp.com","password":"admin"}'
+
+# Verify admin login (monolith)
+curl -X POST http://localhost:4000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin@fyp.com","password":"admin"}'
+
+# Quick health checks
+curl http://localhost:8080/health
+curl http://localhost:4000/health
+```
+
+### Safe Stop vs Full Reset
+```bash
+# Safe stop — data survives for next demo
+docker-compose down
+
+# Full reset — destroys ALL data, must re-seed everything
+docker-compose down -v
+```
+
+### If Users Are Missing
+If `admin/users/count` returns only 1 (just the admin), re-seed:
+```bash
+curl -X POST http://localhost:8080/auth/seed-users
+```
+
+### Start the Performance Stack (for k6 demos)
+```bash
+cd performance
+docker-compose up -d
+# Then open Grafana at http://localhost:3000
+```
