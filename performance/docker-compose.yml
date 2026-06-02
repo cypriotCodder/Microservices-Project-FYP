@@ -8,6 +8,22 @@ services:
     environment:
       - INFLUXDB_DB=k6
 
+  # Dashboard + InfluxDB reverse proxy on port 8087.
+  # Serves the dashboard HTML and proxies /query to InfluxDB from the SAME
+  # origin, eliminating all CORS issues.
+  # Open: http://localhost:8087
+  influx-cors-proxy:
+    image: nginx:alpine
+    ports:
+      - "8087:80"
+    depends_on:
+      - influxdb
+    volumes:
+      - ./nginx-cors.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./presentation_dashboard.html:/usr/share/nginx/html/presentation_dashboard.html:ro
+      - ./diag.html:/usr/share/nginx/html/diag.html:ro
+      - ./chart.umd.min.js:/usr/share/nginx/html/chart.umd.min.js:ro
+
   grafana:
     image: grafana/grafana:latest
     ports:
@@ -37,3 +53,4 @@ services:
     # not just per-request HTTP metrics. This is what makes GROUP BY "arch"
     # work for vus, http_reqs, error-rate panels in Grafana.
     command: run --tag arch=${ARCH:-unknown} /scripts/loadtest.js
+

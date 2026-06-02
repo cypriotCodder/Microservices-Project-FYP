@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html><head><title>Dashboard Diagnostic</title>
+<style>body{background:#111;color:#0f0;font-family:monospace;font-size:16px;padding:20px}
+.ok{color:#0f0}.fail{color:#f00}.warn{color:#ff0}pre{white-space:pre-wrap}</style>
+</head><body>
+<h2>Dashboard Diagnostic</h2>
+<div id="log"></div>
+<script>
+const log = document.getElementById('log');
+function add(cls, msg) {
+  const d = document.createElement('div');
+  d.className = cls;
+  d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  log.appendChild(d);
+}
+
+async function run() {
+  add('ok', '1. Page loaded OK');
+  
+  // Test if Chart.js loaded
+  if (typeof Chart !== 'undefined') {
+    add('ok', '2. Chart.js loaded: v' + Chart.version);
+  } else {
+    add('fail', '2. Chart.js NOT loaded - CDN blocked?');
+  }
+  
+  // Test relative URL fetch
+  add('warn', '3. Testing fetch("/query?db=k6&q=SHOW MEASUREMENTS")...');
+  try {
+    const r = await fetch('/query?db=k6&q=' + encodeURIComponent('SHOW MEASUREMENTS') + '&epoch=ms');
+    const text = await r.text();
+    add('ok', `3. Fetch OK! Status: ${r.status}, Body: ${text.slice(0,300)}`);
+  } catch(e) {
+    add('fail', `3. Fetch FAILED: ${e.name}: ${e.message}`);
+  }
+  
+  // Test absolute URL fetch  
+  add('warn', '4. Testing fetch("http://localhost:8087/query?db=k6&q=SHOW MEASUREMENTS")...');
+  try {
+    const r = await fetch('http://localhost:8087/query?db=k6&q=' + encodeURIComponent('SHOW MEASUREMENTS') + '&epoch=ms');
+    const text = await r.text();
+    add('ok', `4. Fetch OK! Status: ${r.status}, Body: ${text.slice(0,300)}`);
+  } catch(e) {
+    add('fail', `4. Fetch FAILED: ${e.name}: ${e.message}`);
+  }
+
+  // Test with a real data query
+  add('warn', '5. Testing actual p95 query...');
+  try {
+    const q = 'SELECT percentile("value",95) FROM "http_req_duration" WHERE time > now()-30m GROUP BY time(5s) fill(null) LIMIT 3';
+    const r = await fetch('/query?db=k6&q=' + encodeURIComponent(q) + '&epoch=ms');
+    const json = await r.json();
+    add('ok', `5. Query OK! Result: ${JSON.stringify(json).slice(0,400)}`);
+  } catch(e) {
+    add('fail', `5. Query FAILED: ${e.name}: ${e.message}`);
+  }
+  
+  // Report current URL
+  add('warn', `INFO: Current page URL = ${window.location.href}`);
+  add('warn', `INFO: Origin = ${window.location.origin}`);
+}
+run();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.7/chart.umd.min.js"></script>
+</body></html>

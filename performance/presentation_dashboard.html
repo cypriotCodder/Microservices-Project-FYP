@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Microservices vs Monolith — Live Stress Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="/chart.umd.min.js"></script>
+<style>
+/* ─── Reset & Base ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --blue: #2563EB;
+  --blue-glow: rgba(37,99,235,0.25);
+  --blue-dim: rgba(37,99,235,0.12);
+  --red: #DC2626;
+  --red-glow: rgba(220,38,38,0.25);
+  --red-dim: rgba(220,38,38,0.12);
+  --green: #22C55E;
+  --amber: #F59E0B;
+  --danger: #EF4444;
+  --bg: #0B0F1A;
+  --surface: #111827;
+  --surface2: #1F2937;
+  --border: #374151;
+  --text: #F9FAFB;
+  --text-dim: #9CA3AF;
+  --grey-pill: #6B7280;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+  --font-sans: 'Inter', -apple-system, sans-serif;
+}
+
+html, body {
+  height: 100%; width: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+/* ─── Layout Shell ─────────────────────────────────────────────────── */
+#app {
+  display: flex; flex-direction: column;
+  height: 100vh; width: 100vw;
+  padding: 12px 20px;
+  gap: 10px;
+}
+
+/* ─── Top Bar ──────────────────────────────────────────────────────── */
+.top-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+.top-bar h1 {
+  font-size: 1.15rem; font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--blue) 0%, #818CF8 50%, var(--red) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.top-bar-right {
+  display: flex; align-items: center; gap: 16px;
+}
+.live-badge {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.85rem; font-weight: 600;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+}
+.live-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+.live-dot.offline { background: var(--danger); animation: none; }
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.6); }
+  50% { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
+}
+.vu-badge {
+  font-family: var(--font-mono);
+  font-size: 0.85rem; font-weight: 600;
+  padding: 4px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.gear-btn {
+  background: none; border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px;
+  color: var(--text-dim); cursor: pointer;
+  font-size: 1.1rem; transition: all 0.2s;
+}
+.gear-btn:hover { color: var(--text); border-color: var(--text-dim); }
+
+/* ─── Winner Pill ──────────────────────────────────────────────────── */
+.winner-row {
+  display: flex; align-items: center; gap: 12px;
+  flex-shrink: 0;
+}
+.arch-badge {
+  padding: 6px 16px;
+  font-size: 0.8rem; font-weight: 700;
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  border-radius: 8px;
+  border: 2px solid;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.arch-badge.ms { border-color: var(--blue); color: var(--blue); background: var(--blue-dim); }
+.arch-badge.mono { border-color: var(--red); color: var(--red); background: var(--red-dim); }
+
+.winner-pill {
+  flex: 1;
+  text-align: center;
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-size: 1.1rem; font-weight: 700;
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  transition: all 0.5s ease;
+  white-space: nowrap;
+}
+.winner-pill.blue {
+  background: linear-gradient(135deg, rgba(37,99,235,0.3), rgba(37,99,235,0.1));
+  border: 2px solid var(--blue);
+  color: var(--blue);
+  box-shadow: 0 0 30px var(--blue-glow);
+}
+.winner-pill.red {
+  background: linear-gradient(135deg, rgba(220,38,38,0.3), rgba(220,38,38,0.1));
+  border: 2px solid var(--red);
+  color: var(--red);
+  box-shadow: 0 0 30px var(--red-glow);
+}
+.winner-pill.grey {
+  background: var(--surface2);
+  border: 2px solid var(--grey-pill);
+  color: var(--text-dim);
+}
+
+/* ─── Panels ───────────────────────────────────────────────────────── */
+.panels-row {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 16px; flex: 1; min-height: 0;
+}
+.panel {
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 18px;
+  gap: 10px;
+  overflow: hidden;
+}
+.panel.ms-panel { border-top: 3px solid var(--blue); }
+.panel.mono-panel { border-top: 3px solid var(--red); }
+
+.panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.panel-title {
+  font-size: 0.95rem; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.panel.ms-panel .panel-title { color: var(--blue); }
+.panel.mono-panel .panel-title { color: var(--red); }
+.panel-updated {
+  font-size: 0.7rem; color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
+.stats-row {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+.stat-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.stat-label {
+  font-size: 0.6rem; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 1.65rem; font-weight: 700;
+  line-height: 1.1;
+  transition: color 0.3s;
+}
+.stat-unit {
+  font-size: 0.65rem; color: var(--text-dim);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+.stat-value.green { color: var(--green); }
+.stat-value.amber { color: var(--amber); }
+.stat-value.red   { color: var(--danger); }
+
+.chart-container {
+  flex: 1; min-height: 0;
+  position: relative;
+}
+.chart-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ─── Endpoint Breakdown ───────────────────────────────────────────── */
+.endpoints-section {
+  flex-shrink: 0;
+}
+.endpoints-label {
+  font-size: 0.7rem; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  text-align: center;
+}
+.endpoints-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 8px;
+}
+.ep-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 6px;
+  text-align: center;
+  transition: border-color 0.3s;
+}
+.ep-card:hover { border-color: var(--text-dim); }
+.ep-name {
+  font-size: 0.65rem; font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ep-bars {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.ep-bar-row {
+  display: flex; align-items: center; gap: 4px;
+}
+.ep-bar-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%; flex-shrink: 0;
+}
+.ep-bar-dot.blue { background: var(--blue); }
+.ep-bar-dot.red { background: var(--red); }
+.ep-bar-value {
+  font-family: var(--font-mono);
+  font-size: 0.8rem; font-weight: 700;
+  min-width: 0;
+}
+
+/* ─── Config Overlay ───────────────────────────────────────────────── */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+.overlay.hidden { display: none; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.config-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px 40px;
+  width: 460px; max-width: 90vw;
+  box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+}
+.config-card h2 {
+  font-size: 1.3rem; font-weight: 700;
+  margin-bottom: 6px;
+  background: linear-gradient(135deg, var(--blue), var(--red));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.config-card .subtitle {
+  font-size: 0.8rem; color: var(--text-dim);
+  margin-bottom: 24px;
+}
+.config-field {
+  margin-bottom: 16px;
+}
+.config-field label {
+  display: block;
+  font-size: 0.75rem; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.config-field input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.config-field input:focus { border-color: var(--blue); }
+.start-btn {
+  width: 100%;
+  padding: 14px;
+  margin-top: 8px;
+  background: linear-gradient(135deg, var(--blue), #4F46E5);
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-family: var(--font-sans);
+  font-size: 1rem; font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.start-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(37,99,235,0.35); }
+.start-btn:active { transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- ─── Config Overlay ──────────────────────────────────────────────── -->
+<div class="overlay hidden" id="configOverlay">
+  <div class="config-card">
+    <h2>Dashboard Configuration</h2>
+    <p class="subtitle">Connect to your InfluxDB instance running the k6 stress test.</p>
+    <div class="config-field">
+      <label>InfluxDB URL (leave empty for same-origin)</label>
+      <input type="text" id="cfgUrl" value="" placeholder="e.g. http://localhost:8087 (leave empty if served via nginx)">
+    </div>
+    <div class="config-field">
+      <label>Database</label>
+      <input type="text" id="cfgDb" value="k6">
+    </div>
+    <div class="config-field">
+      <label>Refresh Interval (seconds)</label>
+      <input type="number" id="cfgInterval" value="3" min="1" max="60">
+    </div>
+    <button class="start-btn" id="startBtn">START DASHBOARD</button>
+  </div>
+</div>
+
+<!-- ─── Main App ────────────────────────────────────────────────────── -->
+<div id="app">
+
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <h1>Microservices vs Monolith — Live Stress Test</h1>
+    <div class="top-bar-right">
+      <div class="live-badge">
+        <span class="live-dot" id="liveDot"></span>
+        <span id="liveLabel">OFFLINE</span>
+      </div>
+      <div class="vu-badge" id="vuBadge">VUs: —</div>
+      <button class="gear-btn" id="gearBtn" title="Settings">⚙</button>
+    </div>
+  </div>
+
+  <!-- Winner Pill Row -->
+  <div class="winner-row">
+    <div class="arch-badge ms">MICRO&shy;SERVICES</div>
+    <div class="winner-pill grey" id="winnerPill">Waiting for data…</div>
+    <div class="arch-badge mono">MONOLITH</div>
+  </div>
+
+  <!-- Two Panels -->
+  <div class="panels-row">
+    <!-- Microservices Panel -->
+    <div class="panel ms-panel">
+      <div class="panel-header">
+        <span class="panel-title">Microservices</span>
+        <span class="panel-updated" id="msUpdated">—</span>
+      </div>
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="stat-label">Req / sec</div>
+          <div class="stat-value" id="msRps">—</div>
+          <div class="stat-unit">requests</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">P95 Latency</div>
+          <div class="stat-value" id="msP95">—</div>
+          <div class="stat-unit">milliseconds</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Error Rate</div>
+          <div class="stat-value" id="msErr">—</div>
+          <div class="stat-unit">percent</div>
+        </div>
+      </div>
+      <div class="chart-container"><canvas id="msChart"></canvas></div>
+    </div>
+
+    <!-- Monolith Panel -->
+    <div class="panel mono-panel">
+      <div class="panel-header">
+        <span class="panel-title">Monolith</span>
+        <span class="panel-updated" id="monoUpdated">—</span>
+      </div>
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="stat-label">Req / sec</div>
+          <div class="stat-value" id="monoRps">—</div>
+          <div class="stat-unit">requests</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">P95 Latency</div>
+          <div class="stat-value" id="monoP95">—</div>
+          <div class="stat-unit">milliseconds</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Error Rate</div>
+          <div class="stat-value" id="monoErr">—</div>
+          <div class="stat-unit">percent</div>
+        </div>
+      </div>
+      <div class="chart-container"><canvas id="monoChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Endpoint Breakdown -->
+  <div class="endpoints-section">
+    <div class="endpoints-label">Endpoint pass rate — <span style="color:var(--blue)">microservices (blue)</span> vs <span style="color:var(--red)">monolith (red)</span></div>
+    <div class="endpoints-grid" id="endpointsGrid"></div>
+  </div>
+
+</div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────
+let CFG = { url: '', db: '', interval: 3 };
+let intervalId = null;
+let isOnline = false;
+
+// Chart data buffers (last 30 points)
+const MAX_POINTS = 30;
+const msP95History = [];
+const monoP95History = [];
+const chartLabels = [];
+
+// Endpoint map: k6 check name → display label
+const ENDPOINTS = [
+  { k6: 'SessionLogin',       label: 'Login' },
+  { k6: 'FetchCatalog',       label: 'Catalog' },
+  { k6: 'PostComment',        label: 'Comment' },
+  { k6: 'FetchProductDetails', label: 'Product' },
+  { k6: 'FetchOrders',        label: 'Orders' },
+  { k6: 'AuthRegister',       label: 'Register' },
+  { k6: 'CreateOrder',        label: 'Place Order' },
+  { k6: 'PingDB',             label: 'DB Ping' },
+];
+
+// ─── DOM refs ─────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+// ─── Charts Setup ─────────────────────────────────────────────────────
+function createChart(canvasId, borderColor, bgColor) {
+  const ctx = $(canvasId).getContext('2d');
+  return new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        data: [],
+        borderColor: borderColor,
+        backgroundColor: bgColor,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        fill: true,
+        tension: 0.35,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          enabled: true,
+          callbacks: {
+            label: ctx => `${ctx.parsed.y?.toFixed(1) ?? '—'} ms`
+          }
+        }
+      },
+      scales: {
+        x: {
+          display: false,
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(75,85,99,0.3)' },
+          ticks: {
+            color: '#9CA3AF',
+            font: { family: "'IBM Plex Mono', monospace", size: 10 },
+            callback: v => v + ' ms'
+          }
+        }
+      }
+    }
+  });
+}
+
+let msChartInstance, monoChartInstance;
+
+// ─── Config Overlay ───────────────────────────────────────────────────
+$('startBtn').addEventListener('click', startDashboard);
+$('gearBtn').addEventListener('click', () => {
+  stopPolling();
+  $('configOverlay').classList.remove('hidden');
+});
+
+// Allow Enter key to start
+document.querySelectorAll('.config-field input').forEach(inp => {
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') startDashboard(); });
+});
+
+// Auto-start on load (overlay is hidden by default now)
+startDashboard();
+
+function startDashboard() {
+  CFG.url = $('cfgUrl').value.replace(/\/+$/, '');
+  CFG.db = $('cfgDb').value.trim() || 'k6';
+  CFG.interval = Math.max(1, parseInt($('cfgInterval').value, 10) || 3);
+
+  $('configOverlay').classList.add('hidden');
+
+  // Initialize charts
+  if (!msChartInstance) {
+    msChartInstance = createChart('msChart', '#2563EB', 'rgba(37,99,235,0.1)');
+    monoChartInstance = createChart('monoChart', '#DC2626', 'rgba(220,38,38,0.1)');
+  }
+
+  // Build endpoint cards
+  buildEndpointCards();
+
+  // Start polling
+  poll();
+  intervalId = setInterval(poll, CFG.interval * 1000);
+}
+
+function stopPolling() {
+  if (intervalId) { clearInterval(intervalId); intervalId = null; }
+}
+
+// ─── InfluxDB Query Helper ───────────────────────────────────────────
+async function influxQuery(q) {
+  // If CFG.url is empty, use relative URL (same-origin via nginx proxy)
+  const base = CFG.url || '';
+  const url = `${base}/query?db=${encodeURIComponent(CFG.db)}&q=${encodeURIComponent(q)}&epoch=ms`;
+  console.log('[dashboard] fetch:', url);
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const json = await resp.json();
+  console.log('[dashboard] result:', JSON.stringify(json).slice(0, 200));
+  return json.results;
+}
+
+function extractLastValue(results) {
+  try {
+    const series = results[0]?.series?.[0];
+    if (!series) return null;
+    const vals = series.values;
+    // Walk backwards to find a non-null value
+    for (let i = vals.length - 1; i >= 0; i--) {
+      if (vals[i][1] !== null && vals[i][1] !== undefined) return vals[i][1];
+    }
+    return null;
+  } catch { return null; }
+}
+
+function extractTimeSeries(results) {
+  try {
+    const vals = results[0]?.series?.[0]?.values || [];
+    return vals.map(v => ({ t: v[0], v: v[1] }));
+  } catch { return []; }
+}
+
+// ─── Data Fetching ────────────────────────────────────────────────────
+async function fetchArchMetrics(arch) {
+  const [p95Res, rpsRes, failedRes, totalRes] = await Promise.all([
+    influxQuery(`SELECT percentile("value",95) FROM "http_req_duration" WHERE "arch"='${arch}' AND time > now()-10m GROUP BY time(5s) fill(null)`),
+    influxQuery(`SELECT sum("value") FROM "http_reqs" WHERE "arch"='${arch}' AND time > now()-10m GROUP BY time(5s) fill(0)`),
+    influxQuery(`SELECT sum("value") FROM "http_req_failed" WHERE "arch"='${arch}' AND time > now()-10m`),
+    influxQuery(`SELECT sum("value") FROM "http_reqs" WHERE "arch"='${arch}' AND time > now()-10m`),
+  ]);
+
+  const p95 = extractLastValue(p95Res);
+  const p95Series = extractTimeSeries(p95Res);
+
+  // RPS: take last non-zero bucket, divide by 5s
+  const rpsRaw = extractLastValue(rpsRes);
+  const rps = rpsRaw !== null ? (rpsRaw / 5) : null;
+
+  // Error rate
+  const failed = extractLastValue(failedRes) ?? 0;
+  const total = extractLastValue(totalRes) ?? 0;
+  const errRate = total > 0 ? (failed / total) * 100 : null;
+
+  return { p95, rps, errRate, p95Series };
+}
+
+async function fetchVUs() {
+  const res = await influxQuery(`SELECT last("value") FROM "vus" WHERE time > now()-2m`);
+  return extractLastValue(res);
+}
+
+async function fetchEndpointPassRate(name, arch) {
+  // k6 writes checks with the request's `name` tag + a result value (0 or 1)
+  // Pass rate = sum of values where check passed / total checks
+  const [passRes, totalRes] = await Promise.all([
+    influxQuery(`SELECT sum("value") FROM "checks" WHERE "name"='${name}' AND "arch"='${arch}' AND time > now()-10m`),
+    influxQuery(`SELECT count("value") FROM "checks" WHERE "name"='${name}' AND "arch"='${arch}' AND time > now()-10m`),
+  ]);
+  const passed = extractLastValue(passRes) ?? 0;
+  const total = extractLastValue(totalRes) ?? 0;
+  if (total === 0) return null;
+  return (passed / total) * 100;
+}
+
+// ─── UI Update Helpers ────────────────────────────────────────────────
+function formatNum(v, decimals = 1) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return Number(v).toFixed(decimals);
+}
+
+function p95Color(v) {
+  if (v === null || v === undefined) return '';
+  if (v < 200) return 'green';
+  if (v <= 1000) return 'amber';
+  return 'red';
+}
+
+function errColor(v) {
+  if (v === null || v === undefined) return '';
+  if (v < 10) return 'green';
+  if (v <= 30) return 'amber';
+  return 'red';
+}
+
+function timeStr() {
+  return new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function updatePanel(prefix, data) {
+  const rpsEl = $(prefix + 'Rps');
+  const p95El = $(prefix + 'P95');
+  const errEl = $(prefix + 'Err');
+  const updEl = $(prefix + 'Updated');
+
+  rpsEl.textContent = formatNum(data.rps, 0);
+  rpsEl.className = 'stat-value';
+
+  p95El.textContent = formatNum(data.p95, 1);
+  p95El.className = 'stat-value ' + p95Color(data.p95);
+
+  errEl.textContent = data.errRate !== null ? formatNum(data.errRate, 1) + '%' : '—';
+  errEl.className = 'stat-value ' + errColor(data.errRate);
+
+  updEl.textContent = 'Updated ' + timeStr();
+}
+
+function pushChartPoint(chart, historyArr, series) {
+  // Extract last 30 non-null points from the time series
+  const valid = series.filter(p => p.v !== null);
+  const last30 = valid.slice(-MAX_POINTS);
+
+  chart.data.labels = last30.map((_, i) => '');
+  chart.data.datasets[0].data = last30.map(p => p.v);
+  chart.update('none');
+}
+
+function updateWinner(msP95, monoP95) {
+  const pill = $('winnerPill');
+  if (msP95 === null || monoP95 === null) {
+    pill.className = 'winner-pill grey';
+    pill.textContent = 'Waiting for data…';
+    return;
+  }
+  if (msP95 < monoP95) {
+    const factor = monoP95 / msP95;
+    pill.className = 'winner-pill blue';
+    pill.innerHTML = `⚡ Microservices <span style="font-size:1.4em">${factor.toFixed(1)}×</span> faster p95`;
+  } else if (monoP95 < msP95) {
+    const factor = msP95 / monoP95;
+    pill.className = 'winner-pill red';
+    pill.innerHTML = `⚡ Monolith <span style="font-size:1.4em">${factor.toFixed(1)}×</span> faster p95`;
+  } else {
+    pill.className = 'winner-pill grey';
+    pill.textContent = 'Tied — identical p95';
+  }
+}
+
+function setOnline(online) {
+  isOnline = online;
+  const dot = $('liveDot');
+  const label = $('liveLabel');
+  if (online) {
+    dot.className = 'live-dot';
+    label.textContent = 'LIVE';
+    label.style.color = 'var(--green)';
+  } else {
+    dot.className = 'live-dot offline';
+    label.textContent = 'OFFLINE';
+    label.style.color = 'var(--danger)';
+  }
+}
+
+// ─── Endpoint Cards ───────────────────────────────────────────────────
+function buildEndpointCards() {
+  const grid = $('endpointsGrid');
+  grid.innerHTML = '';
+  ENDPOINTS.forEach(ep => {
+    const card = document.createElement('div');
+    card.className = 'ep-card';
+    card.id = 'ep-' + ep.k6;
+    card.innerHTML = `
+      <div class="ep-name">${ep.label}</div>
+      <div class="ep-bars">
+        <div class="ep-bar-row">
+          <span class="ep-bar-dot blue"></span>
+          <span class="ep-bar-value" id="ep-ms-${ep.k6}" style="color:var(--blue)">—</span>
+        </div>
+        <div class="ep-bar-row">
+          <span class="ep-bar-dot red"></span>
+          <span class="ep-bar-value" id="ep-mono-${ep.k6}" style="color:var(--red)">—</span>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+async function updateEndpoints() {
+  const promises = ENDPOINTS.map(async ep => {
+    const [msRate, monoRate] = await Promise.all([
+      fetchEndpointPassRate(ep.k6, 'microservices'),
+      fetchEndpointPassRate(ep.k6, 'monolith'),
+    ]);
+    const msEl = $('ep-ms-' + ep.k6);
+    const monoEl = $('ep-mono-' + ep.k6);
+    if (msEl) msEl.textContent = msRate !== null ? formatNum(msRate, 0) + '%' : '—';
+    if (monoEl) monoEl.textContent = monoRate !== null ? formatNum(monoRate, 0) + '%' : '—';
+  });
+  await Promise.all(promises);
+}
+
+// ─── Main Poll Loop ──────────────────────────────────────────────────
+async function poll() {
+  try {
+    const [msData, monoData, vus] = await Promise.all([
+      fetchArchMetrics('microservices'),
+      fetchArchMetrics('monolith'),
+      fetchVUs(),
+    ]);
+
+    setOnline(true);
+
+    // Update panels
+    updatePanel('ms', msData);
+    updatePanel('mono', monoData);
+
+    // VUs
+    $('vuBadge').textContent = `VUs: ${vus !== null ? Math.round(vus) : '—'}`;
+
+    // Winner pill
+    updateWinner(msData.p95, monoData.p95);
+
+    // Charts
+    pushChartPoint(msChartInstance, msP95History, msData.p95Series);
+    pushChartPoint(monoChartInstance, monoP95History, monoData.p95Series);
+
+    // Endpoints (fire-and-forget, don't block main metrics)
+    updateEndpoints().catch(() => {});
+
+  } catch (err) {
+    console.warn('Poll error:', err.message, err);
+    setOnline(false);
+  }
+}
+</script>
+</body>
+</html>
