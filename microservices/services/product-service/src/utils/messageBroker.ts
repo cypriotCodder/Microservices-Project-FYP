@@ -137,6 +137,12 @@ export const consumeCommentCreatedEvents = async () => {
 
   console.log("Listening for COMMENT_CREATED events...");
 
+  // Process one message at a time — provides natural backpressure so queue
+  // depth is visible under load (messages stay "Ready" until the consumer
+  // finishes the current one).  Also prevents the consumer from buffering
+  // thousands of unacked messages in memory.
+  await channel.prefetch(1);
+
   channel!.consume("COMMENT_CREATED", async (msg) => {
     if (msg !== null) {
       try {

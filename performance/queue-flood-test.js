@@ -42,9 +42,13 @@ function request(url, options = {}) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const lib = parsed.protocol === 'https:' ? https : http;
+    const headers = { ...(options.headers || {}) };
+    if (options.body) {
+      headers['Content-Length'] = Buffer.byteLength(options.body);
+    }
     const req = lib.request(url, {
       method: options.method || 'GET',
-      headers: options.headers || {},
+      headers,
       timeout: 30000,
     }, (res) => {
       let body = '';
@@ -116,7 +120,7 @@ async function main() {
   const loginRes = await request(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'user0@test.com', password: 'password123' })
+    body: JSON.stringify({ username: 'admin@fyp.com', password: 'admin' })
   });
 
   if (loginRes.status !== 200) {
@@ -198,7 +202,7 @@ async function main() {
 
           // Pick a random product to spread load
           const pid = (products[Math.floor(Math.random() * products.length)]._id ||
-                       products[Math.floor(Math.random() * products.length)].id);
+            products[Math.floor(Math.random() * products.length)].id);
 
           await request(`${API_BASE}/products/${pid}/comments`, {
             method: 'POST',
