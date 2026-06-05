@@ -1,14 +1,10 @@
 # Dissertation System Architecture Guide
 
-> **Note to AI Agents & Researchers:** This document provides a high-level, clear, and comprehensive breakdown of the technical systems built for this dissertation. The core objective of this project is to empirically compare a **Monolithic Architecture** against a **Distributed Microservices Architecture** under extreme load, using an e-commerce platform as the test vehicle.
-
----
-
 ## 1. Project Overview
 
-We have built a fully functional e-commerce platform twice. Both platforms share the exact same functional requirements (Users can register, browse products, add comments, purchase items, and receive LLM-generated product descriptions). 
+I have built a fully functional e-commerce platform twice. Both platforms share the exact same functional requirements (Users can register, browse products, add comments, purchase items, and receive LLM-generated product descriptions). 
 
-The dissertation compares how the underlying architectural design affects **Performance**, **Resilience**, and **Scalability** when subjected to extreme high-throughput load testing.
+This dissertation compares how the underlying architectural design affects **Performance**, **Resilience**, and **Scalability** when subjected to extreme high-throughput load testing.
 
 ---
 
@@ -68,7 +64,7 @@ The Microservices system breaks the e-commerce platform down into isolated, inde
 
 ## 5. The Testing Framework
 
-To scientifically compare these two architectures, we utilize a highly deterministic, probabilistic testing methodology.
+To scientifically compare these two architectures, I utilized a highly deterministic, probabilistic testing methodology.
 
 *   **Load Generator:** `k6` (an open-source load testing tool).
 *   **Virtual Users (VU):** The script spawns up to 300 concurrent VUs. Each VU logs in natively, pulls a JWT token, and enters an infinite loop of reading the catalog and posting comments.
