@@ -182,49 +182,52 @@ async function main() {
     );
   }, MONITOR_INTERVAL_MS);
 
-  // ── Step 5: Flood phase ────────────────────────────────────────────────────
-  console.log('\n④ Starting comment flood...\n');
+  // ── Step 5: Flood phase — publish directly to RabbitMQ ──────────────────
+  // Publishing through the API gateway is too slow (~200/s) because of HTTP
+  // overhead. Instead, use the RabbitMQ Management API to push messages
+  // directly into the queue. This overwhelms the prefetch(1) consumer and
+  // creates a dramatic fill-up → drain visual.
+  console.log('\n④ Starting comment flood (direct to RabbitMQ)...\n');
 
   const floodEnd = Date.now() + (FLOOD_DURATION_SEC * 1000);
-  const delayBetweenRequests = Math.max(1, Math.floor(1000 / (TARGET_RPS / CONCURRENCY)));
+  const BATCH_SIZE = 50; // messages per batch
+  const BATCH_DELAY = 10; // ms between batches
 
-  // Create worker pool
-  const workers = [];
-  for (let w = 0; w < CONCURRENCY; w++) {
-    workers.push((async () => {
-      let seq = 0;
-      while (Date.now() < floodEnd) {
-        try {
-          const commentPayload = JSON.stringify({
-            userId: userId || 'flood-test',
-            content: `k6 flood-test w${w} seq${seq++} t${Date.now()}`
-          });
+  while (Date.now() < floodEnd) {
+    // Fire a batch of publish requests in parallel
+    const batch = [];
+    for (let i = 0; i < BATCH_SIZE; i++) {
+      const pid = (products[Math.floor(Math.random() * products.length)]._id ||
+        products[Math.floor(Math.random() * products.length)].id);
 
-          // Pick a random product to spread load
-          const pid = (products[Math.floor(Math.random() * products.length)]._id ||
-            products[Math.floor(Math.random() * products.length)].id);
+      const payload = JSON.stringify({
+        productId: pid,
+        userId: String(userId || 'flood-test'),
+        content: `k6 flood-test seq${totalSent + i} t${Date.now()}`
+      });
 
-          await request(`${API_BASE}/products/${pid}/comments`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: commentPayload
-          });
-          totalSent++;
-        } catch (e) {
-          totalErrors++;
-        }
-
-        // Pace the requests
-        await new Promise(r => setTimeout(r, delayBetweenRequests));
-      }
-    })());
+      batch.push(
+        request(`${RABBITMQ_API}/exchanges/%2f/amq.default/publish`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Basic ${RABBITMQ_AUTH}`
+          },
+          body: JSON.stringify({
+            properties: { delivery_mode: 2 },
+            routing_key: 'COMMENT_CREATED',
+            payload,
+            payload_encoding: 'string'
+          })
+        }).then(() => { totalSent++; })
+          .catch(() => { totalErrors++; })
+      );
+    }
+    await Promise.all(batch);
+    await new Promise(r => setTimeout(r, BATCH_DELAY));
   }
 
-  // Wait for all workers to finish
-  await Promise.all(workers);
+
   phase = 'DRAIN';
   console.log(`\n\n⑤ Flood phase complete. Sent ${totalSent} comments (${totalErrors} errors).`);
   console.log('   Waiting for queue to drain...\n');
