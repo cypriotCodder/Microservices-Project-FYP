@@ -24,6 +24,17 @@ const seed = async () => {
     await connectMongo(mongoUri);
 
     try {
+        // --- 0. Idempotency Check ---
+        // Skip seeding if data already exists (prevents wipes on container restart)
+        const existingUsers = await prisma.user.count();
+        const existingProducts = await Product.countDocuments();
+
+        if (existingUsers > 10 && existingProducts > 10) {
+            console.log(`⏭️  Database already seeded (${existingUsers} users, ${existingProducts} products). Skipping.`);
+            console.log('   To force a re-seed, clear the databases first.');
+            return;
+        }
+
         // --- 1. Clean Existing Databases ---
         console.log('🧹 Formatting existing databases...');
         await prisma.recommendation.deleteMany();
@@ -161,3 +172,4 @@ const seed = async () => {
 };
 
 seed();
+

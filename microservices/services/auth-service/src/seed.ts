@@ -34,15 +34,31 @@ async function seed() {
     const prisma = new PrismaClient({ adapter });
 
     try {
-        const hash = await bcrypt.hash('admin', 10);
+        // --- 1. Seed admin user ---
+        const adminHash = await bcrypt.hash('admin', 10);
         await prisma.user.upsert({
             where: { username: 'admin@fyp.com' },
-            update: { password: hash, role: 'ADMIN' },
-            create: { username: 'admin@fyp.com', password: hash, role: 'ADMIN' },
+            update: { password: adminHash, role: 'ADMIN' },
+            create: { username: 'admin@fyp.com', password: adminHash, role: 'ADMIN' },
         });
         console.log('[Seed] ✅ admin@fyp.com ready (created or updated)');
+
+        // --- 2. Seed 50 k6 test users ---
+        const testHash = await bcrypt.hash('password123', 10);
+        let created = 0;
+        let skipped = 0;
+        for (let i = 0; i < 50; i++) {
+            const username = `user${i}@test.com`;
+            await prisma.user.upsert({
+                where: { username },
+                update: { password: testHash },
+                create: { username, password: testHash, role: 'USER' },
+            });
+            created++;
+        }
+        console.log(`[Seed] ✅ ${created} k6 test users ready (user0@test.com … user49@test.com)`);
     } catch (e) {
-        console.error('[Seed] ❌ Failed to seed admin user:', e);
+        console.error('[Seed] ❌ Failed to seed users:', e);
         process.exit(1);
     } finally {
         await prisma.$disconnect();
@@ -51,3 +67,4 @@ async function seed() {
 }
 
 seed();
+

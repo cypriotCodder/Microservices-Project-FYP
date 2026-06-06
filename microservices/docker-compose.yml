@@ -173,7 +173,23 @@ services:
     environment:
       - COLLECTOR_OTLP_ENABLED=true
 
+  seeder:
+    build:
+      context: ../tools/seeder
+    environment:
+      - DATABASE_URL=postgresql://postgres:8011nedimK216@postgres:5432/microservices_db?schema=public
+      - MONGO_URI=mongodb://root:examplepassword@mongo:27017/microservices_products?authSource=admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+      auth-service:
+        condition: service_started
+    restart: "no"
+
 volumes:
   postgres_data:
   mongodb_data:
   rabbitmq_data:
+
