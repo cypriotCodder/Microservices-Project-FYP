@@ -135,9 +135,29 @@ export function Dashboard() {
     useEffect(() => {
         const loadDashboardData = async () => {
             try {
-                const prodData = await fetchFromAPI(`/products?page=1&limit=500`);
-                const isPaginated = prodData && typeof prodData === 'object' && !Array.isArray(prodData) && 'products' in prodData;
-                const allProducts: Product[] = isPaginated ? prodData.products : (Array.isArray(prodData) ? prodData : []);
+                // Fetch ALL products by paginating through the server.
+                // First request gets total count, then fetch remaining pages in parallel.
+                const PAGE_LIMIT = 500;
+                const firstPage = await fetchFromAPI(`/products?page=1&limit=${PAGE_LIMIT}`);
+                const isPaginated = firstPage && typeof firstPage === 'object' && !Array.isArray(firstPage) && 'products' in firstPage;
+
+                let allProducts: Product[];
+                if (isPaginated) {
+                    allProducts = [...firstPage.products];
+                    const serverTotal = firstPage.totalPages || 1;
+                    if (serverTotal > 1) {
+                        const remaining = await Promise.all(
+                            Array.from({ length: serverTotal - 1 }, (_, i) =>
+                                fetchFromAPI(`/products?page=${i + 2}&limit=${PAGE_LIMIT}`)
+                            )
+                        );
+                        for (const pg of remaining) {
+                            if (pg?.products) allProducts.push(...pg.products);
+                        }
+                    }
+                } else {
+                    allProducts = Array.isArray(firstPage) ? firstPage : [];
+                }
                 setProducts(allProducts);
 
                 // Load personalized recommendations for logged-in user
