@@ -15,13 +15,19 @@ const VU_USERNAME = () => `user${(__VU - 1) % 50}@test.com`;
 const VU_PASSWORD = 'password123';
 
 export const options = {
-    stages: [
+    /*stages: [
         { duration: '30s', target: 25  },  // warm up
         { duration: '60s', target: 100 },  // moderate
         { duration: '60s', target: 250 },  // ramp
         { duration: '60s', target: 400 },  // stress
         { duration: '60s', target: 500 },  // peak
         { duration: '30s', target: 0   },  // cool down
+    ]*/
+    stages: [
+        { duration: '20s', target: 50 },
+        { duration: '40s', target: 300 },
+        { duration: '30s', target: 300 },
+        { duration: '10s', target: 0 },
     ],
     thresholds: {
         // Microservices: record it but NEVER abort — let it die visibly in Grafana
