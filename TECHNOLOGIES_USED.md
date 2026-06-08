@@ -1,0 +1,45 @@
+# Project Technologies List
+
+This document outlines the core technologies used across both the monolithic and microservices architectures in this project, explaining the purpose of each.
+
+## 1. Core Languages & Frameworks
+- **TypeScript**: The primary programming language used across both the frontend and backend microservices, providing static typing to catch errors at compile-time and improve developer experience.
+- **Node.js**: The runtime environment used to build and run all backend microservices and the monolithic server.
+- **Express.js**: A minimal and flexible Node.js web application framework used to build the RESTful API endpoints in each microservice (e.g., API Gateway, Auth Service, Product Service).
+- **React.js**: A JavaScript library for building user interfaces, specifically used to build the e-commerce client-side application.
+- **Vite**: A modern, fast build tool and development server used to bundle the React frontend, providing a much faster development experience compared to traditional bundlers like Webpack.
+- **TailwindCSS (v4)**: A utility-first CSS framework used for rapid UI development and styling in the React frontend.
+- **Lucide React**: An open-source icon library used for crisp and scalable SVG icons within the React application.
+- **Recharts**: A composable charting library built on React components, used for the admin dashboard to visualize metrics or sales data.
+
+## 2. Databases & ORMs
+- **PostgreSQL**: A powerful, open-source object-relational database system. Used for data that requires strict relational integrity (like User accounts and Authentication) in the `auth-service` and the original `monolith_db`.
+- **Prisma**: A next-generation Node.js and TypeScript ORM (Object-Relational Mapper) used to interact with the PostgreSQL database in a type-safe manner, avoiding raw SQL queries.
+- **MongoDB**: A flexible NoSQL document database. Chosen for the `product-service` and `order-service` to allow for a flexible, schema-less data model which is ideal for storing unstructured product catalogs, orders, and comments.
+- **Mongoose**: An Object Data Modeling (ODM) library for MongoDB and Node.js. It manages relationships between data, provides schema validation, and is used to translate between objects in code and the representation of those objects in MongoDB.
+
+## 3. Caching & Asynchronous Messaging
+- **Redis**: An in-memory data structure store, used as a high-performance cache. It is primarily used to cache the product catalog and debounce heavy database operations, preventing the database from crashing under high load (configured to evict least-recently-used keys).
+- **RabbitMQ**: A robust open-source message broker. Used to facilitate asynchronous communication between microservices. For example, instead of locking the database during high traffic, comment submissions are dropped into a RabbitMQ queue (using `amqplib`), allowing the `product-service` to process them in the background asynchronously.
+
+## 4. Security & Authentication
+- **JSON Web Tokens (JWT)**: An open, industry-standard method for representing claims securely between two parties. Used by the `auth-service` to issue stateless access tokens for user sessions.
+- **bcrypt**: A password-hashing function used to securely hash user passwords before storing them in the PostgreSQL database.
+
+## 5. Containerization & Orchestration
+- **Docker**: Used to containerize each microservice, database, and caching layer into isolated, reproducible environments. This ensures the application runs consistently across different environments.
+- **Docker Compose**: A tool for defining and running multi-container Docker applications. It is used to spin up the entire microservices architecture (API Gateway, services, Postgres, Mongo, Redis, RabbitMQ, Jaeger) with a single command based on the `docker-compose.yml` file.
+
+## 6. Observability, Monitoring & Tracing
+- **OpenTelemetry**: An observability framework used to instrument the Node.js services, allowing the system to capture distributed traces. It traces the journey of a single HTTP request as it hops across different microservices.
+- **Jaeger UI**: An open-source, end-to-end distributed tracing visualization tool. It receives the trace data from OpenTelemetry and provides a web interface to identify bottlenecks and track request flows visually.
+- **Telegraf**: A plugin-driven server agent for collecting and reporting metrics, deployed via Docker to participate in the telemetry pipeline.
+
+## 7. Performance Testing & Chaos Engineering
+- **k6**: An open-source load testing tool. Used to simulate up to 300 concurrent Virtual Users (VUs) continuously hitting the system to compare the resilience of the Monolithic vs. Distributed Microservices architectures.
+- **InfluxDB**: A time-series database optimized for fast, high-availability storage and retrieval of time series data. Used to store the real-time load testing metrics (latency, throughput, HTTP errors) generated by k6.
+- **Grafana**: A multi-platform open-source analytics and interactive visualization web application. It connects to InfluxDB to plot comparative performance degradation curves and system health dashboards in real-time.
+- **Pumba**: A chaos testing tool for Docker containers. Used to intentionally inject network latency (e.g., forcing a 5-second delay into the `llm-service`) to scientifically test the API Gateway's Circuit Breaker capabilities and isolate cascading failures.
+
+## 8. External Integrations
+- **Groq Cloud API (Llama-3 model)**: An external Artificial Intelligence / Large Language Model API service integrated into the platform (via the dedicated `llm-service`) to generate intelligent, context-aware product descriptions or summaries on demand.
