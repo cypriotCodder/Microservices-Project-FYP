@@ -1,6 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { Options, createProxyMiddleware } from 'http-proxy-middleware';
-import { ServerResponse } from 'http';
+import http, { ServerResponse } from 'http';
+import https from 'https';
+
+// Persistent connection pools — reuse TCP sockets across proxy requests
+// instead of opening (and tearing down) a new connection for every request.
+// Under 300+ VUs this is the difference between ~5ms and ~300ms avg latency.
+const httpAgent  = new http.Agent({ keepAlive: true, maxSockets: 100 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
 
 enum BreakerState {
     CLOSED = 'CLOSED',       // Normal operation
@@ -79,6 +86,8 @@ export const createCircuitBreakerProxy = (proxyOptions: Options, fallbackHandler
     // Enhance proxy options with interceptors
     const enhancedOptions: Options = {
         ...proxyOptions,
+        // Inject persistent keep-alive agent to reuse TCP connections
+        agent: (proxyOptions.target as string)?.startsWith('https') ? httpsAgent : httpAgent,
         on: {
             proxyReq: (proxyReq, req) => {
                 // Re-attach the body that express.json() already parsed.
