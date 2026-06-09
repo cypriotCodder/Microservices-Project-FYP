@@ -48,7 +48,7 @@ const ProductCard = ({ p, qty, onAdd, onInc, onDec }: { p: Product, qty: number,
       onMouseLeave={() => setHover(false)}
       className="group relative rounded-2xl bg-paper shadow-card hover:shadow-cardHi hover:-translate-y-1 transition-all duration-200 p-3"
     >
-      <div className="relative aspect-[4/5] overflow-hidden rounded-xl">
+      <div className="relative aspect-4/5 overflow-hidden rounded-xl">
         <Placeholder swatch={p.swatch} label="product photo" large />
         <Link to={`/product/${getProductId(p)}`}
           aria-label="quick view"
@@ -120,7 +120,6 @@ export function Dashboard() {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [recProducts, setRecProducts] = useState<Product[]>([]);
-    const [recMessage, setRecMessage] = useState<string>('');
 
     const [category, setCategory] = useState("All categories");
     const [sort, setSort] = useState("Featured");
@@ -167,7 +166,6 @@ export function Dashboard() {
                     const userId = currentUser?.userId || '1';
                     const recData = await fetchFromAPI(`/recommendations/${userId}`);
                     const recList = recData?.recommendations || [];
-                    setRecMessage(recData?.message || '');
                     // Resolve productIds to full product objects from the already-loaded list
                     const resolved = recList
                         .map((r: any) => allProducts.find(p => getProductId(p) === String(r.productId)))
@@ -272,7 +270,7 @@ export function Dashboard() {
               {recProducts.length > 0 ? (
                 <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
                   {recProducts.map(p => (
-                    <div key={getProductId(p)} className="snap-start flex-shrink-0 w-52">
+                    <div key={getProductId(p)} className="snap-start shrink-0 w-52">
                       <ProductCard
                         p={p}
                         qty={cart[getProductId(p)] || 0}
@@ -285,7 +283,7 @@ export function Dashboard() {
                 </div>
               ) : (
                 <div className="flex items-center gap-4 p-5 rounded-2xl border border-dashed border-line bg-paper/50">
-                  <Icon name="spark" size={20} className="text-mute flex-shrink-0" />
+                  <Icon name="spark" size={20} className="text-mute shrink-0" />
                   <div>
                     <p className="text-sm text-ink font-medium">Your recommendations will appear here</p>
                     <p className="text-xs text-mute mt-0.5">Browse and click on products to personalise your feed</p>

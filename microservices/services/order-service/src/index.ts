@@ -12,6 +12,17 @@ const PORT = process.env.PORT || 3003;
 
 app.use(express.json());
 
+// Per-request timeout: if any handler takes >10s, abort the response.
+// Prevents a single slow Mongo write from holding a connection forever.
+app.use((req, res, next) => {
+    res.setTimeout(10000, () => {
+        if (!res.headersSent) {
+            res.status(503).json({ error: 'Request timed out' });
+        }
+    });
+    next();
+});
+
 app.get('/health', (req, res) => {
     res.json({ status: 'Order Service is running' });
 });
@@ -22,9 +33,15 @@ const startServer = async () => {
     // CONNECT TO RABBITMQ
     await connectToRabbitMQ();
 
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
         console.log(`Order Service running on port ${PORT}`);
     });
+
+    // Close idle keep-alive connections quickly after load tests end.
+    // Without this, hundreds of sockets linger and the event loop stalls.
+    server.keepAliveTimeout = 5000;   // close idle sockets after 5s
+    server.headersTimeout = 6000;     // must be > keepAliveTimeout
+    server.maxConnections = 200;      // hard cap on concurrent connections
 };
 
 app.use("/", orderRoutes);

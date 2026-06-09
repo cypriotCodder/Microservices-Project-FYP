@@ -44,7 +44,8 @@ app.post('/summarize', async (req, res) => {
                 headers: {
                     'Authorization': `Bearer ${groqApiKey}`,
                     'Content-Type': 'application/json'
-                }
+                },
+                timeout: 5000 // 5s hard cap — fail fast on rate limits / stalls
             }
         );
 
@@ -88,7 +89,8 @@ app.post('/generate-description', async (req, res) => {
                 headers: {
                     'Authorization': `Bearer ${groqApiKey}`,
                     'Content-Type': 'application/json'
-                }
+                },
+                timeout: 5000 // 5s hard cap — fail fast on rate limits / stalls
             }
         );
 

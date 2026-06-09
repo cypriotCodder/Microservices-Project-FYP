@@ -9,6 +9,8 @@ export interface Product {
   stock: number;
   category: string;
   image?: string;
+  swatch?: string;
+  note?: string;
 }
 
 export function getProductId(p: Product): string {

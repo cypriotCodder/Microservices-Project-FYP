@@ -15,19 +15,13 @@ const VU_USERNAME = () => `user${(__VU - 1) % 50}@test.com`;
 const VU_PASSWORD = 'password123';
 
 export const options = {
-    /*stages: [
-        { duration: '30s', target: 25 },  // warm up
+    stages: [
+        { duration: '30s', target: 25  },  // warm up
         { duration: '60s', target: 100 },  // moderate
         { duration: '60s', target: 250 },  // ramp
         { duration: '60s', target: 400 },  // stress
         { duration: '60s', target: 500 },  // peak
-        { duration: '30s', target: 0 },  // cool down
-    ]*/
-    stages: [
-        { duration: '20s', target: 50 },
-        { duration: '20s', target: 500 },
-        { duration: '90s', target: 500 },
-        { duration: '10s', target: 0 },
+        { duration: '30s', target: 0   },  // cool down
     ],
     thresholds: {
         // Microservices: record it but NEVER abort — let it die visibly in Grafana
@@ -208,17 +202,17 @@ export default function (data) {
         res = http.get(`${TARGET}/products/ping`, p('PingDB'));
         check(res, { 'ping ok': r => r.status === 200 });
 
-    } else if (roll < 0.50) {
-        // FetchProductDetails (25%)
+    } else if (roll < 0.45) {
+        // FetchProductDetails (20%)
         res = http.get(`${TARGET}/products/${randomProduct}`, p('FetchProductDetails'));
         check(res, { 'status is 200': r => r.status === 200 });
 
-    } else if (roll < 0.75) {
-        // FetchOrders (25%) — DB join with auth userId
+    } else if (roll < 0.65) {
+        // FetchOrders (20%) — DB join with auth userId
         res = http.get(`${TARGET}/orders/${vUserId}`, p('FetchOrders'));
         check(res, { 'status is 200': r => r.status === 200 });
 
-    } else if (roll < 0.85) {
+    } else if (roll < 0.75) {
         // AuthRegister (10%) — bcrypt hash on server (new user signups)
         const regPayload = JSON.stringify({ username: `k6_${randomString(10)}`, password: 'password123' });
         res = http.post(`${TARGET}/auth/register`, regPayload,
@@ -226,14 +220,14 @@ export default function (data) {
         );
         check(res, { 'status is 201': r => r.status === 201 });
 
-    } else if (roll < 0.87) {
-        // LLMSummarize (2%) — external Groq API call; low weight to avoid 429 rate limits
+    } else if (roll < 0.80) {
+        // LLMSummarize (5%) — external Groq API call; latency wildcard
         const llmPayload = JSON.stringify({ text: 'A standard k6 generated e-commerce product description for stress testing.' });
         res = http.post(`${TARGET}/llm/summarize`, llmPayload, p('LLMSummarize'));
         check(res, { 'status is 200': r => r.status === 200 });
 
     } else if (roll < 0.90) {
-        // CreateContent (3%) — triggers microservice cross-communication (also calls LLM)
+        // CreateContent (10%) — triggers microservice cross-communication
         const contentPayload = JSON.stringify({ lengthText: '2 sentences', targetUrl: TARGET });
         res = http.post(`${TARGET}/content/generate-product`, contentPayload, p('CreateContent'));
         check(res, { 'status is 200|201': r => r.status === 200 || r.status === 201 });

@@ -55,7 +55,7 @@ const ProductCard = ({ p, qty, onAdd, onInc, onDec }: { p: Product, qty: number,
       onMouseLeave={() => setHover(false)}
       className="group relative rounded-2xl bg-paper shadow-card hover:shadow-cardHi hover:-translate-y-1 transition-all duration-200 p-3"
     >
-      <div className="relative aspect-[4/5] overflow-hidden rounded-xl">
+      <div className="relative aspect-4/5 overflow-hidden rounded-xl">
         <Placeholder swatch={p.swatch} label="product photo" large />
         <Link to={`/product/${p.id}`}
           aria-label="quick view"
@@ -274,7 +274,7 @@ export function Dashboard() {
               {recProducts.length > 0 ? (
                 <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
                   {recProducts.map(p => (
-                    <div key={p.id} className="snap-start flex-shrink-0 w-52">
+                    <div key={p.id} className="snap-start shrink-0 w-52">
                       <ProductCard
                         p={p}
                         qty={cart[p.id] || 0}
@@ -287,7 +287,7 @@ export function Dashboard() {
                 </div>
               ) : (
                 <div className="flex items-center gap-4 p-5 rounded-2xl border border-dashed border-line bg-paper/50">
-                  <Icon name="spark" size={20} className="text-mute flex-shrink-0" />
+                  <Icon name="spark" size={20} className="text-mute shrink-0" />
                   <div>
                     <p className="text-sm text-ink font-medium">Your recommendations will appear here</p>
                     <p className="text-xs text-mute mt-0.5">Browse and click on products to personalise your feed</p>

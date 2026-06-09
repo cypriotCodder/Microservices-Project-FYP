@@ -18,6 +18,16 @@ const PORT = process.env.PORT || 3002;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Per-request timeout: abort after 10s to prevent connection pile-up.
+app.use((req, res, next) => {
+    res.setTimeout(10000, () => {
+        if (!res.headersSent) {
+            res.status(503).json({ error: 'Request timed out' });
+        }
+    });
+    next();
+});
+
 app.get('/health', (req, res) => {
     res.json({ status: 'Product Service is running' });
 });
@@ -200,9 +210,13 @@ const startServer = async () => {
     await consumeOrderDeletedEvents();
     await consumeCommentCreatedEvents();
 
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
         console.log(`Product Service running on port ${PORT}`);
     });
+
+    server.keepAliveTimeout = 5000;
+    server.headersTimeout = 6000;
+    server.maxConnections = 200;
 };
 
 startServer();

@@ -95,11 +95,17 @@ export const createCircuitBreakerProxy = (proxyOptions: Options, fallbackHandler
                 // raw stream, so the proxy would forward an empty body without this.
                 const body = (req as Request).body;
                 if (body && Object.keys(body).length > 0) {
-                    const bodyStr = JSON.stringify(body);
-                    proxyReq.setHeader('Content-Type', 'application/json');
-                    proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyStr));
-                    proxyReq.write(bodyStr);
-                    proxyReq.end();
+                    try {
+                        const bodyStr = JSON.stringify(body);
+                        proxyReq.setHeader('Content-Type', 'application/json');
+                        proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyStr));
+                        proxyReq.write(bodyStr);
+                        // Do NOT call proxyReq.end() — http-proxy-middleware manages
+                        // the stream lifecycle. Calling end() manually conflicts with
+                        // keepAlive socket reuse and causes ECONNRESET / headers-sent crashes.
+                    } catch (e) {
+                        // Socket already dead — let the error handler deal with it
+                    }
                 }
             },
             error: (err, req, res) => {

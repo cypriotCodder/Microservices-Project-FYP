@@ -44,6 +44,7 @@ services:
       - testing
     volumes:
       - ./loadtest.js:/scripts/loadtest.js:ro
+      - ./loadtest-demo.js:/scripts/loadtest-demo.js:ro
       - ./results:/results
     environment:
       - K6_OUT=influxdb=http://influxdb:8086/k6

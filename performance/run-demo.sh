@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
-# run-tests.sh — Sequential isolated stress test.
+# run-demo.sh — Live demo: both architectures run IN PARALLEL.
 #
-# Run 1: Microservices only  → ./results/results-microservices.json
-# Run 2: Monolith only       → ./results/results-monolith.json
-# Comparison summary printed at end.
+# Both k6 instances start simultaneously so Grafana shows both latency
+# curves moving at the same time — the visual the audience needs.
 #
-# Usage:  ./run-tests.sh
+# Usage:  ./run-demo.sh
 
-# NOTE: no 'set -e' — k6 exits 99 when thresholds are crossed (expected),
-# which would abort the script before the monolith run starts.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 MONOLITH_URL="${MONOLITH_URL:-http://host.docker.internal:4000}"
@@ -20,55 +17,60 @@ MICROSERVICES_DIR="/Users/nedim/Desktop/myRepo/FYP/deneme1/microservices"
 mkdir -p "$SCRIPT_DIR/results"
 
 echo "╔══════════════════════════════════════════════════════════╗"
-echo "║       Full Stress Test — Architectural Comparison        ║"
+echo "║       Live Demo — Parallel Write-Heavy Test              ║"
 echo "╠══════════════════════════════════════════════════════════╣"
-echo "║  Max VUs : 500                                           ║"
-echo "║  Duration: ~5 min per architecture                       ║"
+echo "║  Max VUs : 150 per architecture (300 total)              ║"
+echo "║  Duration: ~1 min (both run simultaneously)              ║"
+echo "║  Mode    : Write-heavy (no LLM calls)                    ║"
 echo "║  Grafana : http://localhost:3000                         ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
 
-# ─── RUN 1: MICROSERVICES ──────────────────────────────────────────────────────
-echo "▶  Run 1/2 — MICROSERVICES  (target: $MICROSERVICES_URL)"
-echo "   Starting in 3 seconds..."
-sleep 3
+# ─── LAUNCH BOTH IN PARALLEL ──────────────────────────────────────────────────
+echo "▶  Launching MICROSERVICES + MONOLITH simultaneously..."
+echo "   Both streams write to InfluxDB — watch Grafana for live split."
+echo ""
 
+# Microservices k6 (background)
 DOCKER_CONFIG=$(mktemp -d) /usr/local/bin/docker-compose run --no-deps -T --rm \
+    --name k6-demo-micro \
     -e TARGET_URL="$MICROSERVICES_URL" \
     -e ARCH="microservices" \
     k6 run --tag arch=microservices \
            --out influxdb=http://influxdb:8086/k6 \
-           --summary-export=/results/results-microservices.json \
-           /scripts/loadtest.js || true
-MS_CODE=$?
+           --summary-export=/results/results-demo-microservices.json \
+           /scripts/loadtest-demo.js 2>&1 | sed 's/^/  [micro] /' &
+MICRO_PID=$!
 
-echo ""
-echo "✅ Run 1 complete (exit $MS_CODE). Stopping microservices app layer..."
-(cd "$MICROSERVICES_DIR" && DOCKER_CONFIG=$(mktemp -d) /usr/local/bin/docker-compose stop api-gateway product-service order-service auth-service llm-service recommendation-service content-creator 2>&1 | grep -v "^$")
-echo ""
+# Small stagger so InfluxDB doesn't choke on two simultaneous connections
+sleep 2
 
-# ─── RUN 2: MONOLITH ──────────────────────────────────────────────────────────
-echo "▶  Run 2/2 — MONOLITH  (target: $MONOLITH_URL)"
-echo "   Starting in 3 seconds..."
-sleep 3
-
+# Monolith k6 (background)
 DOCKER_CONFIG=$(mktemp -d) /usr/local/bin/docker-compose run --no-deps -T --rm \
+    --name k6-demo-mono \
     -e TARGET_URL="$MONOLITH_URL" \
     -e ARCH="monolith" \
     k6 run --tag arch=monolith \
            --out influxdb=http://influxdb:8086/k6 \
-           --summary-export=/results/results-monolith.json \
-           /scripts/loadtest.js || true
-M_CODE=$?
+           --summary-export=/results/results-demo-monolith.json \
+           /scripts/loadtest-demo.js 2>&1 | sed 's/^/  [mono]  /' &
+MONO_PID=$!
+
+echo "  PIDs: micro=$MICRO_PID  mono=$MONO_PID"
+echo "  Waiting for both to finish..."
+echo ""
+
+# Wait for both to complete
+wait $MICRO_PID 2>/dev/null
+wait $MONO_PID 2>/dev/null
 
 echo ""
-echo "✅ Run 2 complete (exit $M_CODE). Stopping monolith app layer..."
-(cd "$MONOLITH_DIR" && DOCKER_CONFIG=$(mktemp -d) /usr/local/bin/docker-compose stop monolith-backend 2>&1 | grep -v "^$")
+echo "✅ Both runs complete."
 echo ""
 
 # ─── COMPARISON ───────────────────────────────────────────────────────────────
 echo "══════════════════════════════════════════════════════════"
-echo "  RESULTS COMPARISON"
+echo "  DEMO RESULTS COMPARISON"
 echo "══════════════════════════════════════════════════════════"
 
 python3 - <<'PYEOF'
@@ -82,8 +84,8 @@ def load(path):
         print(f"  ⚠️  Could not load {path}: {e}")
         return None
 
-ms = load("./results/results-microservices.json")
-mo = load("./results/results-monolith.json")
+ms = load("./results/results-demo-microservices.json")
+mo = load("./results/results-demo-monolith.json")
 
 if not ms or not mo:
     sys.exit(1)
@@ -129,27 +131,13 @@ print("")
 PYEOF
 
 echo "Grafana dashboard    : http://localhost:3000"
-echo "Microservices JSON   : $SCRIPT_DIR/results/results-microservices.json"
-echo "Monolith JSON        : $SCRIPT_DIR/results/results-monolith.json"
-echo ""
-echo "Restarting stopped services..."
-(cd "$MICROSERVICES_DIR" && docker compose up -d 2>&1 | tail -3)
-(cd "$MONOLITH_DIR" && docker compose up -d monolith-backend 2>&1 | tail -3)
-echo "  Done."
+echo "Microservices JSON   : $SCRIPT_DIR/results/results-demo-microservices.json"
+echo "Monolith JSON        : $SCRIPT_DIR/results/results-demo-monolith.json"
 echo ""
 
-# ─── CLEANUP — delete k6 test comments ───────────────────────────────────────
-# Runs after both test runs complete. Deletes only comments whose content
-# starts with "k6 " — products, orders, and real user data are untouched.
-# Both endpoints are unauthenticated so this never silently fails.
+# ─── CLEANUP ──────────────────────────────────────────────────────────────────
 echo "Cleaning up k6 test comments..."
-
-# Wait for containers to be fully ready after restart
-echo "Waiting for services to be ready..."
-sleep 15
-
-curl -sf http://localhost:4000/products > /dev/null && echo "Monolith ready" || echo "Monolith not ready"
-curl -sf http://localhost:8080/products > /dev/null && echo "Microservices ready" || echo "Microservices not ready"
+sleep 5
 
 MONO_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE http://localhost:4000/products/comments/k6)
 MONO_CODE=$(echo "$MONO_RESPONSE" | tail -1)
