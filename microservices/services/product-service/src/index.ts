@@ -214,9 +214,9 @@ const startServer = async () => {
         console.log(`Product Service running on port ${PORT}`);
     });
 
-    server.keepAliveTimeout = 5000;
-    server.headersTimeout = 6000;
-    server.maxConnections = 200;
+    server.keepAliveTimeout = 65000;
+    server.headersTimeout = 66000;
+    server.maxConnections = 2000;
 };
 
 startServer();

@@ -39,9 +39,10 @@ const startServer = async () => {
 
     // Close idle keep-alive connections quickly after load tests end.
     // Without this, hundreds of sockets linger and the event loop stalls.
-    server.keepAliveTimeout = 5000;   // close idle sockets after 5s
-    server.headersTimeout = 6000;     // must be > keepAliveTimeout
-    server.maxConnections = 200;      // hard cap on concurrent connections
+    // Under load, this must be larger than proxy timeouts to avoid ECONNRESET and request aborted errors.
+    server.keepAliveTimeout = 65000;   // 65s keep-alive
+    server.headersTimeout = 66000;     // must be > keepAliveTimeout
+    server.maxConnections = 2000;      // increased hard cap on concurrent connections
 };
 
 app.use("/", orderRoutes);
