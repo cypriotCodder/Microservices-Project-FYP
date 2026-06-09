@@ -300,3 +300,169 @@ cd performance
 docker-compose up -d
 # Then open Grafana at http://localhost:3000
 ```
+
+---
+
+## 15. Before Live Demo — Pre-Flight Checklist
+
+> **Goal:** Run these commands **10–15 minutes before** your live demo so every service is warm, data is seeded, caches are clean, and Grafana starts with empty graphs. Copy-paste the blocks in order.
+
+### Step 0 — Kill Everything (clean slate)
+```bash
+# Tear down all three stacks (order doesn't matter).
+# -v wipes volumes so you start with zero stale data.
+cd /Users/nedim/Desktop/myRepo/FYP/deneme1
+
+(cd microservices && docker compose down -v) 2>/dev/null
+(cd monolith     && docker compose down -v) 2>/dev/null
+(cd performance  && docker compose down -v) 2>/dev/null
+
+# Prune any orphan containers / dangling images (optional but safe)
+docker container prune -f
+docker image prune -f
+```
+
+### Step 1 — Start the Microservices Stack
+```bash
+cd /Users/nedim/Desktop/myRepo/FYP/deneme1/microservices
+docker compose up -d --build
+```
+
+Wait **~20 seconds** for Postgres to pass its healthcheck and for the `seeder` container to auto-create the admin account.
+
+### Step 2 — Start the Monolith Stack
+```bash
+cd /Users/nedim/Desktop/myRepo/FYP/deneme1/monolith
+docker compose up -d --build
+```
+
+### Step 3 — Start the Performance / Grafana Stack
+```bash
+cd /Users/nedim/Desktop/myRepo/FYP/deneme1/performance
+docker compose up -d
+```
+
+### Step 4 — Wait for Health
+```bash
+echo "⏳ Waiting for services..."
+until curl -sf http://localhost:8080/health > /dev/null 2>&1; do sleep 2; done
+echo "✅ Microservices API Gateway is UP"
+
+until curl -sf http://localhost:4000/health > /dev/null 2>&1; do sleep 2; done
+echo "✅ Monolith Backend is UP"
+
+until curl -sf http://localhost:3000/api/health > /dev/null 2>&1; do sleep 2; done
+echo "✅ Grafana is UP"
+```
+
+### Step 5 — Seed Data (both stacks)
+```bash
+# Microservices — test users + products
+curl -s -X POST http://localhost:8080/auth/seed-users | jq .
+curl -s -X POST http://localhost:8080/products/seed  | jq .
+
+# Monolith — test users + products
+curl -s -X POST http://localhost:4000/auth/seed-users | jq .
+curl -s -X POST http://localhost:4000/seed            | jq .
+```
+
+### Step 6 — Verify Logins & Data
+```bash
+# Admin login — Microservices
+curl -s -X POST http://localhost:8080/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin@fyp.com","password":"admin"}' | jq .token
+
+# Admin login — Monolith
+curl -s -X POST http://localhost:4000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin@fyp.com","password":"admin"}' | jq .token
+
+# Test user login (proves k6 users are seeded)
+curl -s -X POST http://localhost:8080/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"user0@test.com","password":"password123"}' | jq .token
+
+# User count (expect ≥ 51: 1 admin + 50 test users)
+curl -s http://localhost:3001/admin/users/count | jq .
+
+# Product count
+curl -s http://localhost:8080/products | jq 'if type == "array" then length else .products | length end'
+```
+
+### Step 7 — Flush Caches & InfluxDB (clean graphs)
+```bash
+# Flush Redis on both stacks so cached responses don't mask real latency
+docker exec -it $(docker ps -qf "name=microservices.*redis") redis-cli FLUSHALL
+docker exec -it $(docker ps -qf "name=monolith.*redis")      redis-cli FLUSHALL
+
+# Wipe previous k6 data from InfluxDB so Grafana starts with empty panels
+curl -s -X POST 'http://localhost:8086/query?db=k6' \
+  --data-urlencode 'q=DROP SERIES FROM /.*/' > /dev/null
+echo "✅ InfluxDB k6 data wiped — Grafana panels are clean"
+```
+
+### Step 8 — Open Browser Tabs
+Open these in separate tabs **before** the demo starts:
+
+| Tab | URL | Purpose |
+|-----|-----|---------|
+| 1 | http://localhost:5178 | Microservices Frontend |
+| 2 | http://localhost:5174 | Monolith Frontend |
+| 3 | http://localhost:3000 | Grafana (k6 dashboard) |
+| 4 | http://localhost:16686 | Jaeger Tracing UI |
+| 5 | http://localhost:15672 | RabbitMQ Management (guest/guest) |
+
+### Step 9 — Smoke Test (optional but recommended)
+Run a quick single-user request to prove the entire flow works end-to-end:
+```bash
+# Login as test user, place an order, post a comment
+TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"user0@test.com","password":"password123"}' | jq -r .token)
+
+PRODUCT_ID=$(curl -s http://localhost:8080/products | jq -r '.[0]._id // .[0].id')
+
+# Post a comment
+curl -s -X POST "http://localhost:8080/products/${PRODUCT_ID}/comments" \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"userId":"smoke","content":"Pre-demo smoke test"}' | jq .
+
+# Place an order
+curl -s -X POST http://localhost:8080/orders \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"userId\":\"smoke\",\"totalAmount\":9.99,\"products\":[{\"productId\":\"${PRODUCT_ID}\",\"quantity\":1}]}" | jq .
+
+echo "✅ Smoke test passed — system is ready for demo"
+```
+
+### Step 10 — Run the Live Load Test (when ready)
+When you're live and the audience is watching:
+```bash
+cd /Users/nedim/Desktop/myRepo/FYP/deneme1/performance
+./run-demo.sh
+```
+Switch to the **Grafana tab** immediately — both curves appear in real-time.
+
+### Quick Reference — One-Liner (Steps 1–7 combined)
+For experienced runs where you just want to fire everything:
+```bash
+cd /Users/nedim/Desktop/myRepo/FYP/deneme1 && \
+(cd microservices && docker compose down -v) 2>/dev/null; \
+(cd monolith && docker compose down -v) 2>/dev/null; \
+(cd performance && docker compose down -v) 2>/dev/null; \
+(cd microservices && docker compose up -d --build) && \
+(cd monolith && docker compose up -d --build) && \
+(cd performance && docker compose up -d) && \
+echo "⏳ Waiting..." && sleep 25 && \
+curl -s -X POST http://localhost:8080/auth/seed-users > /dev/null && \
+curl -s -X POST http://localhost:8080/products/seed > /dev/null && \
+curl -s -X POST http://localhost:4000/auth/seed-users > /dev/null && \
+curl -s -X POST http://localhost:4000/seed > /dev/null && \
+docker exec $(docker ps -qf "name=microservices.*redis") redis-cli FLUSHALL > /dev/null && \
+docker exec $(docker ps -qf "name=monolith.*redis") redis-cli FLUSHALL > /dev/null && \
+curl -s -X POST 'http://localhost:8086/query?db=k6' --data-urlencode 'q=DROP SERIES FROM /.*/' > /dev/null && \
+echo "✅ All systems GO — open browser tabs and run ./run-demo.sh"
+```
