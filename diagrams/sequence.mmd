@@ -1,0 +1,50 @@
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    %% Define Participants
+    actor VU as k6 Virtual User
+    
+    box rgb(0, 50, 60) Microservices Async Path
+        participant Gateway as API Gateway
+        participant Product as Product Service
+        participant RMQ as RabbitMQ
+        participant Worker as Product Worker
+        participant Mongo as MongoDB
+    end
+
+    box rgb(60, 20, 20) Monolith Sync Path
+        participant Monolith as Monolith Backend
+        participant Postgres as PostgreSQL
+    end
+    
+    participant Redis as Redis Cache
+
+    %% --- MICROSERVICES PATH ---
+    note over VU, Redis: ASYNCHRONOUS PATH (Microservices)
+    
+    VU->>Gateway: POST /products/:id/comments
+    Gateway->>Product: Forward Request
+    Product->>RMQ: publishCommentCreatedEvent()
+    RMQ-->>Product: Event Queued (Ack)
+    Product-->>Gateway: 202 Accepted
+    Gateway-->>VU: 202 Accepted (Response Time: ~2ms)
+
+    note over RMQ, Redis: Background Processing (Non-blocking)
+    RMQ->>Worker: consumeCommentCreatedEvents()
+    Worker->>Mongo: Comment.create()
+    Mongo-->>Worker: Inserted Row
+    Worker->>Redis: lPush() & lTrim() to update cache
+    Redis-->>Worker: Cache Updated
+    Worker-->>RMQ: Ack Message (Remove from Queue)
+
+    %% --- MONOLITH PATH ---
+    note over VU, Redis: SYNCHRONOUS PATH (Monolith)
+
+    VU->>Monolith: POST /products/:id/comments
+    
+    note over Monolith, Postgres: Request Blocked Until DB Writes Finish
+    Monolith->>Postgres: prisma.comment.create()
+    Postgres-->>Monolith: Inserted Row
+    Monolith->>Redis: lPush() & lTrim() to update cache
+    Redis-->>Monolith: Cache Updated
+    
+    Monolith-->>VU: 201 Created (Response Time: ~15-200ms+ depending on load)

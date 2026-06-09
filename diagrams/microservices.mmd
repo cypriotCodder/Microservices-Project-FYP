@@ -1,0 +1,48 @@
+flowchart TD
+    subgraph External
+        Client[React Client]
+        VU[k6 Load Generator]
+    end
+
+    subgraph "API Gateway Layer"
+        Gateway[API Gateway\nPort 8080/8090]
+    end
+
+    subgraph "Microservices Layer"
+        Auth[Auth Service\nPort 3001]
+        Product[Product Service\nPort 3002]
+        Order[Order Service\nPort 3003]
+        Rec[Recommendation Service\nPort 3004]
+        LLM[LLM Service\nPort 3005]
+        Content[Content Creator\nPort 3008]
+    end
+
+    subgraph "Data & Messaging Layer"
+        Postgres[(PostgreSQL\nAuth & Recs)]
+        Mongo[(MongoDB\nProducts & Orders)]
+        Redis[(Redis\nCache)]
+        RabbitMQ{RabbitMQ\nEvent Broker}
+    end
+
+    %% External Connections
+    Client --> Gateway
+    VU --> Gateway
+
+    %% Gateway Routing
+    Gateway --> Auth
+    Gateway --> Product
+    Gateway --> Order
+    Gateway --> Rec
+    Gateway --> LLM
+    Gateway --> Content
+
+    %% Database Connections
+    Auth --> Postgres
+    Rec --> Postgres
+    Product --> Mongo
+    Order --> Mongo
+    Product --> Redis
+
+    %% Messaging Connections
+    Product -. Publish / Consume .-> RabbitMQ
+    Order -. Publish / Consume .-> RabbitMQ

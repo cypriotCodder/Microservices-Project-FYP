@@ -1,0 +1,22 @@
+flowchart TD
+    subgraph External
+        Client[React Client]
+        VU[k6 Load Generator]
+    end
+
+    subgraph "Application Layer"
+        Backend[Monolith Backend\nSingle Node Process\nPort 4000/4090]
+    end
+
+    subgraph "Data Layer"
+        Postgres[(PostgreSQL\nAll Domain Models)]
+        Redis[(Redis\nCache)]
+    end
+
+    %% External Connections
+    Client --> Backend
+    VU --> Backend
+
+    %% Internal Connections
+    Backend --> Postgres
+    Backend --> Redis
