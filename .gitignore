@@ -1,0 +1,9 @@
+# macOS metadata (at any depth)
+.DS_Store
+
+# Local dependencies and credentials; already tracked files are unaffected.
+node_modules/
+.env
+.env.*
+!.env.example
+!.env.sample
