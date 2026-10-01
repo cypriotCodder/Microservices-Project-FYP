@@ -1,7 +1,7 @@
 # macOS metadata (at any depth)
 .DS_Store
 
-# Local dependencies and credentials; already tracked files are unaffected.
+# Local dependencies and credentials; commit only environment examples.
 node_modules/
 .env
 .env.*

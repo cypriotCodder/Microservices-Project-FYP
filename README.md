@@ -77,11 +77,43 @@ git clone https://github.com/cypriotCodder/Microservices-Project-FYP.git
 cd Microservices-Project-FYP
 ```
 
-Before starting:
+Before starting, copy the examples from the repository root. These paths match the
+`env_file` entries resolved relative to each Compose file:
 
-1. Review the `env_file` entries in both application Compose files. Several `.env` files are already tracked; use your own local credentials and keep them out of commits. Set `GROQ_API_KEY` in `monolith/backend/.env` and `microservices/services/llm-service/.env`. Keep JWT secrets consistent between token issuers and verifiers.
-2. Create `microservices/services/recommendation-service/.env` (referenced by Compose but absent from the repository). An empty file satisfies that reference: Compose supplies its `DATABASE_URL`. Its Prisma recommendation schema may also need initialization; the service startup command does not run migrations.
-3. If you want tracing, add `OTEL_ENABLED=true` to the gateway/core-service environment files before building and starting them.
+```bash
+cp -n monolith/backend/.env.example monolith/backend/.env
+cp -n microservices/api-gateway/.env.example microservices/api-gateway/.env
+cp -n microservices/services/auth-service/.env.example microservices/services/auth-service/.env
+cp -n microservices/services/product-service/.env.example microservices/services/product-service/.env
+cp -n microservices/services/order-service/.env.example microservices/services/order-service/.env
+cp -n microservices/services/llm-service/.env.example microservices/services/llm-service/.env
+cp -n microservices/services/recommendation-service/.env.example microservices/services/recommendation-service/.env
+```
+
+The `-n` option preserves existing local files. Real `.env` and `.env.*` files are
+ignored by Git; only `.env.example` and `.env.sample` files should be committed.
+For an existing checkout, back up any locally customized `.env` files before pulling
+this cleanup, then restore them if Git removes the formerly tracked copies.
+
+1. Set `GROQ_API_KEY` in `monolith/backend/.env` and
+   `microservices/services/llm-service/.env` to your own key for live LLM calls.
+   The example value is a placeholder and cannot authenticate to Groq.
+2. Compose's explicit `environment` entries override values in `env_file`, including
+   database URLs. The database passwords in the examples are placeholders; the
+   unchanged Compose files supply the existing local database credentials. When
+   running a service directly on the host, adjust its `.env` to the actual database
+   password and published host port (PostgreSQL: `5432` for microservices, `5433` for
+   the monolith), and replace container hostnames with reachable addresses.
+3. The recommendation example contains comments only: Compose supplies its
+   `DATABASE_URL`, but still requires the `.env` file to exist. Its Prisma
+   recommendation schema may also need initialization; the service startup command
+   does not run migrations.
+4. The monolith example uses the existing development JWT default. The auth service
+   and gateway also fall back to that default; if setting `JWT_SECRET` explicitly,
+   keep token issuers and verifiers consistent (set the same value in both auth
+   service and gateway `.env` files).
+5. If you want tracing, add `OTEL_ENABLED=true` to the gateway/core-service
+   environment files before building and starting them.
 
 Run these from the repository root:
 
