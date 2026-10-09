@@ -26,6 +26,29 @@ The central research question: **what changes when an application's shared backe
 
 Both implementations use a shared visual language so the same shopping workflows can be explored against different backends.
 
+### Customer experience
+
+Browse the catalogue, inspect a product, and manage quantities in the cart. These captures show the running microservices application with its existing seeded customer account and test catalogue. Product-image placeholders and load-test content are part of the application’s current demo data.
+
+<p align="center">
+  <a href="docs/screenshots/customer-product.jpg"><img src="docs/screenshots/customer-product.jpg" alt="Customer product page showing Portable Camera, its price, stock, description, and add-to-cart button" width="960"></a>
+</p>
+<p align="center"><em>Product details · price, availability, description, and cart action</em></p>
+
+<table>
+  <tr>
+    <th width="50%">Browse the catalogue</th>
+    <th width="50%">Manage the cart</th>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/customer-catalogue.jpg"><img src="docs/screenshots/customer-catalogue.jpg" alt="Customer catalogue showing electronics product cards with prices and stock information" width="100%"></a></td>
+    <td><a href="docs/screenshots/customer-cart.jpg"><img src="docs/screenshots/customer-cart.jpg" alt="Customer cart with a Portable Camera, quantity controls, subtotal, and checkout button" width="100%"></a></td>
+  </tr>
+</table>
+
+<details>
+<summary><strong>Account screens · sign in and registration</strong></summary>
+
 <table>
   <tr>
     <th width="50%">Microservices · Sign in</th>
@@ -37,7 +60,9 @@ Both implementations use a shared visual language so the same shopping workflows
   </tr>
 </table>
 
-*Screenshots captured from the local frontends. These public screens do not require a running backend; they are fresh captures, separate from the saved dissertation charts below. Click an image to view it at full size.*
+</details>
+
+*All screenshots are captured from the local applications and stored in this repository. Click an image to view it at full size. The dissertation charts below are the existing saved experiment figures.*
 
 | Area | Capabilities |
 | :--- | :--- |
@@ -157,7 +182,7 @@ The stress runner executes the targets sequentially and stops the microservices 
 - The environment files referenced by the Compose configurations: `monolith/backend/.env`, `microservices/api-gateway/.env`, and `.env` files in the auth, product, order, recommendation, and LLM service directories.
 - Matching JWT configuration between the gateway and authentication service. Groq-backed features also require a `GROQ_API_KEY` in the LLM service and monolith backend environments.
 
-The Compose files supply container database addresses and several service settings. Review their `environment` and `env_file` entries before starting a fresh checkout. This is a local research environment with development defaults.
+On a fresh checkout, copy the supplied `.env.example` files to `.env` in their respective directories and fill in the required values. The Compose files supply container database addresses and several service settings. Review their `environment` and `env_file` entries before starting a fresh checkout. This is a local research environment with development defaults.
 
 ### Start the applications
 
