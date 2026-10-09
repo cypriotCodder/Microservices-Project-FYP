@@ -1,177 +1,271 @@
-# MicroShop — Monolith vs Microservices
+<div align="center">
 
-A final-year dissertation project implementing the same e-commerce system twice: a **Node.js/Express monolith** and a **distributed microservices application**. The project explores how architectural choices affect performance, resilience, and scalability through load testing, distributed tracing, and controlled failure injection.
+# MicroShop
 
-## Overview
+### One e-commerce application. Two architectures. Measured under load.
 
-Both implementations target the same shopping workflows: account registration and login, product browsing, comments and reviews, orders, recommendations, and AI-assisted content. React/Vite clients provide storefront and administration views. The engineering focus is the backend comparison: service boundaries, persistence, caching, asynchronous messaging, and failure handling.
+A final-year project comparing a **Node.js monolith** with an **event-driven microservices system**, through performance testing, fault injection, and message-queue analysis.
 
-## Research question / comparison goal
+**React · TypeScript · Express · PostgreSQL · MongoDB · Redis · RabbitMQ · Docker · k6**
 
-**How do a monolith and a distributed implementation of the same e-commerce workload behave as demand increases or a downstream dependency slows down?**
+[Application](#application) · [Architecture](#architecture) · [Results](#results) · [Run locally](#run-locally) · [Experiments](#experiments)
 
-The experiment examines request latency, throughput, HTTP failures, and recovery behavior. These implementations also differ in database technology and synchronous versus queued writes, so results cannot isolate service decomposition alone. Scalability is a research goal; the checked-in Compose configuration does not implement autoscaling or replicated recommendation containers.
+</div>
+
+---
+
+## About the project
+
+MicroShop implements the same e-commerce workflows in two backend designs to investigate how architecture affects response time, throughput, and resilience. Both applications provide account registration and login, product browsing, a shopping cart, orders, comments and reviews, recommendations, and AI-assisted product content.
+
+The repository includes both React applications, their backends, Docker Compose environments, load generators, observability dashboards, and the saved measurements behind the result charts.
+
+The central research question: **what changes when an application's shared backend is split into independent services with asynchronous messaging?**
+
+## Application
+
+Both implementations use a shared visual language so the same shopping workflows can be explored against different backends.
+
+<table>
+  <tr>
+    <th width="50%">Microservices · Sign in</th>
+    <th width="50%">Monolith · Create account</th>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/microservices-login.jpg"><img src="docs/screenshots/microservices-login.jpg" alt="MicroShop microservices application showing its sign-in screen" width="100%"></a></td>
+    <td><a href="docs/screenshots/monolith-register.jpg"><img src="docs/screenshots/monolith-register.jpg" alt="MicroShop monolith application showing its account registration screen" width="100%"></a></td>
+  </tr>
+</table>
+
+*Screenshots captured from the local frontends. These public screens do not require a running backend; they are fresh captures, separate from the saved dissertation charts below. Click an image to view it at full size.*
+
+| Area | Capabilities |
+| :--- | :--- |
+| Shopping | Product catalogue, category filtering, product details, cart, and order history |
+| Accounts | Registration, JWT authentication, and role-based administration |
+| Content | Product publishing, comments, reviews, and Groq-powered text generation |
+| Experiment controls | Traffic generation, content generation, and administrative views |
+| Observability | Grafana dashboards, InfluxDB metrics, OpenTelemetry traces, and Jaeger |
 
 ## Architecture
 
 | | Monolith | Microservices |
-|---|---|---|
-| Request path | React → one Express backend | React → API gateway → domain services |
-| Persistence | PostgreSQL through Prisma | PostgreSQL/Prisma for auth and recommendations; MongoDB/Mongoose for products and orders |
-| Cache | Redis | Redis in the product service |
-| Writes | In-process routes and database calls | HTTP plus RabbitMQ events for comments and order-related stock updates |
-| Failure handling | Shared backend process | Gateway circuit breakers with selected fallback responses |
+| :--- | :--- | :--- |
+| Application boundary | One Express backend | API gateway with separate domain services |
+| Persistence | PostgreSQL with Prisma | PostgreSQL with Prisma; MongoDB with Mongoose |
+| Caching | Redis | Redis |
+| Communication | In-process routing and direct database operations | HTTP between services and RabbitMQ events |
+| Comment writes | Stored during request handling | Queued with `202 Accepted`, then processed asynchronously |
+| Fault handling | Shared application process | Gateway circuit breaker for the LLM dependency |
 
-[Monolith diagram](diagrams/monolith.jpeg) · [Microservices diagram](diagrams/microservices.jpeg) · [Sequence diagram](diagrams/sequence.jpeg) — editable Mermaid sources are in [diagrams/](diagrams/).
+### Monolithic deployment
 
-The [architecture guide](DISSERTATION_SYSTEM_ARCHITECTURE.md) records the dissertation design. Some descriptions there are hypotheses or earlier configurations; the code and Compose files define the current implementation. Awaiting network I/O does not itself block the Node.js event loop, and queued writes do not guarantee that database contention disappears.
+<p align="center">
+  <a href="diagrams/monolith.jpeg"><img src="diagrams/monolith.jpeg" alt="Monolith architecture: React client and k6 connect to a single Node backend backed by PostgreSQL and Redis" width="760"></a>
+</p>
 
-## Service breakdown
+### Microservices deployment
 
-| Component | Responsibility |
-|---|---|
-| `api-gateway` | HTTP routing, JWT middleware, circuit breakers, and admin aggregation |
-| `auth-service` | Registration, bcrypt password hashing, JWT issuance, and user data |
-| `product-service` | Catalog, comments/reviews, Redis caching, and RabbitMQ consumers |
-| `order-service` | Order persistence and order events consumed for stock updates |
-| `recommendation-service` | Recommendation endpoints backed by PostgreSQL/Prisma |
-| `llm-service` | Groq API integration using `llama-3.1-8b-instant` for text generation and summaries |
-| `content-creator` | Product-content generation through downstream services |
-| `traffic-service` | Application-level traffic simulation; separate from the k6 suite |
+<p align="center">
+  <a href="diagrams/microservices.jpeg"><img src="diagrams/microservices.jpeg" alt="Microservices architecture: gateway routes to authentication, product, order, recommendation, LLM, and content services with PostgreSQL, MongoDB, Redis, and RabbitMQ" width="960"></a>
+</p>
 
-The monolith contains the corresponding business routes within one backend. A separate `traffic-generator` directory also exists, but is not started by the current Compose file.
+The distributed implementation separates authentication, products, orders, recommendations, and LLM calls. Supporting services generate traffic and content. RabbitMQ carries comment and order events; OpenTelemetry and Jaeger expose request paths across services.
 
-## Key engineering features
+<details>
+<summary><strong>View the interaction sequence diagram</strong></summary>
 
-- **Two implementations of a shared domain:** exposes the tradeoffs between local calls and network boundaries.
-- **Authentication and authorization:** JWT sessions, bcrypt password hashing, and admin middleware.
-- **Polyglot persistence:** relational schemas alongside MongoDB documents managed with Mongoose.
-- **Caching and asynchronous work:** Redis catalog caching and invalidation; RabbitMQ comment processing and order events. An accepted queued comment is not the same as a completed database write.
-- **External AI integration:** Groq/Llama generation with dedicated microservice routing and fallback handling.
-- **Containerized development:** Docker Compose stacks for each application and the performance tools.
+![Application interaction sequence](diagrams/sequence.jpeg)
 
-## Observability and resilience
+Editable diagram sources are available in [diagrams/](diagrams/).
 
-OpenTelemetry instrumentation is present in the gateway and core microservices, exporting to **Jaeger** when `OTEL_ENABLED=true` is set in their environments. The default exporter endpoint is `http://jaeger:4318/v1/traces`. Tracing is opt-in, not automatically enabled merely by starting Jaeger.
+</details>
 
-The gateway implements circuit breakers, including fallback responses for recommendations and LLM requests. **Pumba** is behind the optional `chaos` profile and is configured to inject **5 seconds of network delay for 5 minutes** into matching LLM containers. This provides a failure-injection scenario, not proof that every failure is isolated.
+## Results
 
-**k6 → InfluxDB → Grafana** supplies load-test metrics and dashboards; Telegraf configuration is also included. Inspect response checks and fallback behavior alongside latency: a quick fallback is not necessarily a successful business operation.
+The figures below are the existing project charts in [performance/results/charts/](performance/results/charts/), backed by the saved JSON summaries in [performance/results/](performance/results/). They describe the recorded runs of these implementations, rather than a universal ranking of monoliths and microservices.
 
-## Performance / load-testing methodology
+### At a glance
 
-The current [load script](performance/loadtest.js) ramps through **25, 100, 250, 400, and 500 virtual users**, then back to zero, over five minutes of configured stages. Each user authenticates using a seeded account, repeatedly reads the catalog and posts a comment, and selects additional actions such as reviews, registration, orders, and LLM requests. Randomized actions and external API latency mean runs are not deterministic.
+| Saved run | Mean latency | p95 latency | Throughput | HTTP failure rate |
+| :--- | ---: | ---: | ---: | ---: |
+| Microservices · stress, 500 VUs | **67.5 ms** | **156.7 ms** | 182.1 req/s | 1.56% |
+| Monolith · stress, 500 VUs | 262.4 ms | 985.3 ms | **243.6 req/s** | 1.71% |
+| Microservices · write-heavy, 150 VUs | **156.9 ms** | **883.1 ms** | **318.9 req/s** | 0.00% |
+| Monolith · write-heavy, 150 VUs | 335.2 ms | 1,056.6 ms | 203.7 req/s | 0.00% |
 
-[Saved JSON summaries](performance/results/) include monolith, microservices, demo, and chaos runs. They are useful raw artifacts, but are not presented here as a controlled benchmark or evidence of a universal winner. A reproducible comparison needs the commit, machine/container resources, dataset, cache state, external API conditions, repeated runs, and equivalent success criteria recorded together. The current script uses different latency thresholds for each architecture; threshold pass/fail alone is not a fair comparison.
+*VU = virtual user; p95 = the response time at or below which 95% of measured requests fall. Values are rounded from the aggregate k6 metrics.*
 
-For a fresh comparison, seed both systems, use comparable data and resource budgets, run each target separately, record latency percentiles/throughput/failures, then repeat with chaos enabled. Account for queue drain time and completed writes when comparing asynchronous and synchronous operations.
+**What the saved runs show:** microservices achieved lower mean and p95 latency in both comparisons. The monolith delivered higher aggregate throughput in the stress run, while microservices delivered higher throughput in the write-heavy run. Both write-heavy runs recorded zero HTTP failures. Microservices also had higher maximum latency in both scenarios, so the improvement in typical latency did not remove slow outliers.
 
-The [testing guide](performance/README-testing.md) and [runbook](RUNBOOK.md) provide background. Their older 300-VU descriptions and machine-specific wrapper commands should not override the current script.
+### 01 · Response time under stress
 
-## How to run it
+The stress scenario ramps to **500 concurrent virtual users** over a five-minute staged workload. The latency distribution shows the difference between typical responses and the slowest requests.
 
-Prerequisites: **Docker with Compose v2**, available ports below, and a Groq API key for live LLM calls. These are local research/demo configurations, with development credentials and exposed infrastructure ports; they are not a hardened deployment.
+![Stress-test latency comparison at 500 virtual users](performance/results/charts/01_stress_latency_comparison.png)
 
-```bash
-git clone https://github.com/cypriotCodder/Microservices-Project-FYP.git
-cd Microservices-Project-FYP
-```
+### 02 · Throughput and failures
 
-Before starting, copy the examples from the repository root. These paths match the
-`env_file` entries resolved relative to each Compose file:
+Read throughput alongside latency: the saved monolith stress run handled more requests per second, despite its higher mean response time. HTTP failure rates were close, at approximately 1.6% and 1.7%.
 
-```bash
-cp -n monolith/backend/.env.example monolith/backend/.env
-cp -n microservices/api-gateway/.env.example microservices/api-gateway/.env
-cp -n microservices/services/auth-service/.env.example microservices/services/auth-service/.env
-cp -n microservices/services/product-service/.env.example microservices/services/product-service/.env
-cp -n microservices/services/order-service/.env.example microservices/services/order-service/.env
-cp -n microservices/services/llm-service/.env.example microservices/services/llm-service/.env
-cp -n microservices/services/recommendation-service/.env.example microservices/services/recommendation-service/.env
-```
+![Stress-test throughput and HTTP error-rate comparison](performance/results/charts/02_stress_throughput_errorrate.png)
 
-The `-n` option preserves existing local files. Real `.env` and `.env.*` files are
-ignored by Git; only `.env.example` and `.env.sample` files should be committed.
-For an existing checkout, back up any locally customized `.env` files before pulling
-this cleanup, then restore them if Git removes the formerly tracked copies.
+### 03 · Write-heavy workload
 
-1. Set `GROQ_API_KEY` in `monolith/backend/.env` and
-   `microservices/services/llm-service/.env` to your own key for live LLM calls.
-   The example value is a placeholder and cannot authenticate to Groq.
-2. Compose's explicit `environment` entries override values in `env_file`, including
-   database URLs. The database passwords in the examples are placeholders; the
-   unchanged Compose files supply the existing local database credentials. When
-   running a service directly on the host, adjust its `.env` to the actual database
-   password and published host port (PostgreSQL: `5432` for microservices, `5433` for
-   the monolith), and replace container hostnames with reachable addresses.
-3. The recommendation example contains comments only: Compose supplies its
-   `DATABASE_URL`, but still requires the `.env` file to exist. Its Prisma
-   recommendation schema may also need initialization; the service startup command
-   does not run migrations.
-4. The monolith example uses the existing development JWT default. The auth service
-   and gateway also fall back to that default; if setting `JWT_SECRET` explicitly,
-   keep token issuers and verifiers consistent (set the same value in both auth
-   service and gateway `.env` files).
-5. If you want tracing, add `OTEL_ENABLED=true` to the gateway/core-service
-   environment files before building and starting them.
+The one-minute demonstration workload peaks at **150 VUs per architecture** and excludes LLM calls. It exercises writes such as comments, orders, and reviews. The demo runner launches both architectures concurrently.
 
-Run these from the repository root:
+![Write-heavy demo latency comparison at 150 virtual users](performance/results/charts/03_demo_latency_comparison.png)
+
+### 04 · Which checks passed?
+
+The per-check breakdown adds context to aggregate HTTP metrics. Application checks and HTTP failure rates measure different things; an accepted HTTP response alone does not establish that all expected application behaviour succeeded.
+
+![Stress-test application check pass and fail counts](performance/results/charts/04_stress_check_breakdown.png)
+
+### 05 · Behaviour under an injected fault
+
+The chaos experiment uses Pumba to inject a **five-second network delay into the LLM service** and exercises the gateway's circuit breaker. The saved chaos run recorded a mean response time of **469.4 ms**, a maximum of **15.22 s**, and an HTTP failure rate of **3.65%**.
+
+![Microservices latency during normal operation and an injected LLM-service delay](performance/results/charts/05_chaos_vs_normal_latency.png)
+
+> **Comparison context:** this figure places the normal stress run, peaking at 500 VUs, beside a separate chaos workload capped at 100 VUs. It illustrates the recorded behaviour, but does not isolate the effect of fault injection under an identical load. A lower chaos p95 should not be interpreted as a performance improvement.
+
+### 06 · Queue build-up and recovery
+
+The RabbitMQ experiment records queue depth alongside publish and delivery rates through flood and drain phases. It complements HTTP latency by showing the work that remains after asynchronous requests have been accepted.
+
+![RabbitMQ queue depth, publish rate, and delivery rate during flood and drain phases](performance/results/charts/06_rabbitmq_queue_depth.png)
+
+<details>
+<summary><strong>07 · View the complete results summary</strong></summary>
+
+![Summary of latency, failures, request counts, throughput, and iterations across all recorded scenarios](performance/results/charts/07_summary_table.png)
+
+</details>
+
+### Interpreting the comparison
+
+These experiments compare complete implementations: database engines, service boundaries, and write semantics differ as well as deployment architecture. In particular, a queued `202 Accepted` response measures acceptance time, not completion of the database write. Queue draining and end-to-end completion therefore matter alongside request latency.
+
+The stress runner executes the targets sequentially and stops the microservices application layer before the monolith run; the demo runs them concurrently on shared hardware. These are different experimental conditions. The saved summaries do not provide repeated-run confidence intervals or a complete hardware specification, so the figures should be treated as observations of these runs.
+
+## Run locally
+
+### Prerequisites
+
+- Docker with Docker Compose.
+- The environment files referenced by the Compose configurations: `monolith/backend/.env`, `microservices/api-gateway/.env`, and `.env` files in the auth, product, order, recommendation, and LLM service directories.
+- Matching JWT configuration between the gateway and authentication service. Groq-backed features also require a `GROQ_API_KEY` in the LLM service and monolith backend environments.
+
+The Compose files supply container database addresses and several service settings. Review their `environment` and `env_file` entries before starting a fresh checkout. This is a local research environment with development defaults.
+
+### Start the applications
+
+From the repository root:
 
 ```bash
 docker compose -f microservices/docker-compose.yml up -d --build
 docker compose -f monolith/docker-compose.yml up -d --build
+```
+
+Once startup and database initialisation finish, check the APIs and seed the workload data:
+
+```bash
+curl -f http://localhost:8080/health
+curl -f http://localhost:4000/health
+
+# Microservices: products and test accounts
+curl -X POST http://localhost:8080/products/seed
+curl -X POST http://localhost:8080/auth/seed-users
+
+# Monolith: products and test accounts
+curl -X POST http://localhost:4000/seed
+curl -X POST http://localhost:4000/auth/seed-users
+```
+
+| Interface | Local address |
+| :--- | :--- |
+| Microservices application | [localhost:5178](http://localhost:5178) |
+| Monolith application | [localhost:5174](http://localhost:5174) |
+| Microservices API gateway | [localhost:8080](http://localhost:8080) |
+| Monolith API | [localhost:4000](http://localhost:4000) |
+| RabbitMQ management | [localhost:15672](http://localhost:15672) |
+| Jaeger traces | [localhost:16686](http://localhost:16686) |
+
+The monolith frontend's Compose configuration uses the backend's additional listener on port `4090`; load tests target port `4000`.
+
+### Start observability
+
+```bash
 docker compose -f performance/docker-compose.yml up -d
 ```
 
-| Interface | Local URL |
-|---|---|
-| Microservices storefront / gateway | http://localhost:5178 / http://localhost:8080 |
-| Monolith storefront / API | http://localhost:5174 / http://localhost:4000 |
-| Jaeger | http://localhost:16686 |
-| Grafana | http://localhost:3000 |
-| RabbitMQ management | http://localhost:15672 |
+Open [Grafana](http://localhost:3000) for the provisioned dashboards or the [presentation dashboard](http://localhost:8087/presentation_dashboard.html) for the custom experiment view.
 
-After services are ready, seed test users through `POST /auth/seed-users` on each API. Check `GET /products` for a populated catalog. The runbook lists product-seeding routes; the gateway requires a valid bearer token for product POST requests, including seeding. Use an authenticated session when needed.
-
-To run k6 against the microservices stack and stream metrics to InfluxDB:
+To stop the stacks while retaining named database volumes:
 
 ```bash
-docker compose -f performance/docker-compose.yml run --rm \
-  -e ARCH=microservices -e TARGET_URL=http://host.docker.internal:8080 \
-  k6 run --tag arch=microservices \
-  --summary-export=/results/results-local-microservices.json /scripts/loadtest.js
+docker compose -f performance/docker-compose.yml down
+docker compose -f monolith/docker-compose.yml down
+docker compose -f microservices/docker-compose.yml down
 ```
 
-For the monolith, replace `microservices` with `monolith` in the architecture tag/output filename and use port `4000`. `host.docker.internal` is intended for Docker Desktop; Linux hosts need a reachable host address or host-gateway configuration. Tests write data and may call the external Groq API. The wrapper scripts contain author-specific paths, so use the explicit command above on a fresh checkout.
+## Experiments
 
-Optional chaos experiment:
+| Experiment | Workload | Entry point |
+| :--- | :--- | :--- |
+| Stress comparison | Five-minute ramp to 500 VUs per target | [run-tests.sh](performance/run-tests.sh) / [loadtest.js](performance/loadtest.js) |
+| Write-heavy demonstration | One minute, up to 150 VUs per target, concurrent runs | [run-demo.sh](performance/run-demo.sh) / [loadtest-demo.js](performance/loadtest-demo.js) |
+| LLM fault injection | Five-second injected delay; up to 100 VUs | [run-chaos-test.sh](performance/run-chaos-test.sh) / [chaos-loadtest.js](performance/chaos-loadtest.js) |
+| Queue flood and drain | Configurable duration, concurrency, and target rate | [queue-flood-test.js](performance/queue-flood-test.js) |
+
+The shell runners contain machine-specific paths and Docker Compose executable locations. Adjust those before using them on another machine. Test runs create workload data and can overwrite saved summaries; preserve the existing results if you want to retain the figures shown here.
+
+For a direct stress run with a locally installed k6, use the following from the repository root. These commands save fresh summaries separately from the dissertation results:
 
 ```bash
-docker compose -f microservices/docker-compose.yml --profile chaos up -d pumba
+mkdir -p performance/results/local
+
+k6 run --tag arch=microservices \
+  -e ARCH=microservices -e TARGET_URL=http://localhost:8080 \
+  --summary-export=performance/results/local/microservices.json \
+  performance/loadtest.js
+
+k6 run --tag arch=monolith \
+  -e ARCH=monolith -e TARGET_URL=http://localhost:4000 \
+  --summary-export=performance/results/local/monolith.json \
+  performance/loadtest.js
 ```
 
-Pumba requires access to the Docker socket and compatible network-emulation support. To stop an application while retaining its data, use `docker compose -f <compose-file> down`; adding `-v` deletes its persistent volumes.
+These direct commands do not reproduce the runner's service-stop sequence. Add `--out influxdb=http://localhost:8086/k6` to each command to stream metrics into the running performance stack.
 
-## Repository structure
+### Regenerate the existing charts
+
+The chart generator reads the saved JSON files directly and writes seven PNGs to `performance/results/charts/`. It requires Python 3 and Matplotlib; running it replaces the existing chart images.
+
+```bash
+python3 -m venv /tmp/microshop-charts
+/tmp/microshop-charts/bin/pip install matplotlib
+/tmp/microshop-charts/bin/python performance/generate_charts.py
+```
+
+## Repository guide
 
 ```text
-monolith/          Express backend, Prisma schema, React client, Compose stack
-microservices/     Gateway, domain services, React client, telemetry, Compose stack
-performance/       k6 scripts, saved results, Grafana dashboards, InfluxDB stack
-diagrams/          Architecture/sequence images and editable Mermaid sources
-tools/seeder/      Database-seeding utility
+monolith/                 React client, Express backend, Prisma schema, Compose stack
+microservices/            React client, API gateway, domain services, Compose stack
+performance/              k6 workloads, experiment runners, dashboards, chart generator
+  results/                Saved JSON measurements and chart images
+diagrams/                 Architecture and sequence diagrams, with Mermaid sources
+docs/screenshots/         Local application screenshots used in this README
+tools/seeder/             Database seeding utilities
 ```
 
-Further reading: [Architecture](DISSERTATION_SYSTEM_ARCHITECTURE.md) · [Technology notes](TECHNOLOGIES_USED.md) · [Runbook](RUNBOOK.md) · [Load testing](performance/README-testing.md).
+| Documentation | Contents |
+| :--- | :--- |
+| [Runbook](RUNBOOK.md) | Startup, seeding, logs, tracing, and experiment operations |
+| [Performance testing guide](performance/README-testing.md) | Workload design and k6 usage |
+| [System architecture notes](DISSERTATION_SYSTEM_ARCHITECTURE.md) | Dissertation design background and intended comparisons |
+| [Technology overview](TECHNOLOGIES_USED.md) | Project stack and component roles |
 
-## Tech stack
-
-**Application:** TypeScript, Node.js, Express, React, Vite, Tailwind CSS, Recharts.
-
-**Data and messaging:** PostgreSQL, Prisma, MongoDB, Mongoose, Redis, RabbitMQ.
-
-**Authentication:** JWT, bcrypt.
-
-**Infrastructure and experiments:** Docker Compose, OpenTelemetry, Jaeger, k6, InfluxDB, Grafana, Telegraf, Pumba.
-
-**AI integration:** Groq API, Llama 3.1.
+Some supporting notes describe earlier workload sizes or expected outcomes. The current test scripts and saved result files are the basis for the measurements presented in this README.
