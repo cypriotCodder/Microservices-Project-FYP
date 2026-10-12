@@ -294,3 +294,9 @@ tools/seeder/             Database seeding utilities
 | [Technology overview](TECHNOLOGIES_USED.md) | Project stack and component roles |
 
 Some supporting notes describe earlier workload sizes or expected outcomes. The current test scripts and saved result files are the basis for the measurements presented in this README.
+
+---
+
+## License
+
+Released under the [MIT License](LICENSE).
